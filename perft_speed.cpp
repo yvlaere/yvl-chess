@@ -2,6 +2,21 @@
 #include <iostream>
 #include <array>
 #include <chrono>
+#include <algorithm>
+
+//global constants
+constexpr int INF = std::numeric_limits<int>::max() / 2;
+constexpr size_t TT_SIZE = 1 << 20;
+
+// piece values in centipawns
+constexpr int pawn_value = 100;
+constexpr int knight_value = 320;
+constexpr int bishop_value = 330;
+constexpr int rook_value = 500;
+constexpr int queen_value = 900;
+constexpr int king_value = 20000;
+
+constexpr std::array<int, 6> piece_values = {pawn_value, knight_value, bishop_value, rook_value, queen_value, king_value};
 
 // debugging functions
 
@@ -94,7 +109,8 @@ void perft(game_state& state, int depth, bool color,
     const U64& occupancy_bitboard, int current_depth, 
     zobrist_randoms& zobrist, U64& zobrist_hash, 
     std::array<std::array<move, 256>, 256>& moves_stack, 
-    std::array<move_undo, 256>& undo_stack, uint64_t& node_count) {
+    std::array<move_undo, 256>& undo_stack, uint64_t& node_count,
+    std::array<int, 64>& piece_on_square) {
 
     if (depth == 0) {
         node_count++;
@@ -110,12 +126,37 @@ void perft(game_state& state, int depth, bool color,
         rook_attack_lookup_table, king_lookup_table, 
         occupancy_bitboard);
 
+    std::array<int, 256> move_order;
+    std::array<int, 256> scores;
+
+    // iterate over all pseudo-legal moves
+    for (int i = 0; i < move_count; i++) {
+
+        int score = 0;
+
+        // check for capture
+        int victim_index = piece_on_square[moves[i].to_position];
+        if (victim_index > 0) {
+            int victim_value = piece_values[victim_index%6];
+            int attacker_value = piece_values[moves[i].piece_index%6];
+            score = victim_value*10 - attacker_value;
+        }
+
+        scores[i] = score;
+        move_order[i] = i; // store the index
+    }
+
+    // sort moves based on scores
+    std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
+        return scores[a] > scores[b];
+    });
+
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
         if (moves[i].piece_index != -1) {
 
             move_undo& undo = undo_stack[current_depth];
-            apply_move(state, moves[i], zobrist_hash, zobrist, undo);
+            apply_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
             
             // Ensure move is legal (not putting king in check)
             if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, get_occupancy(state.piece_bitboards))) {
@@ -127,11 +168,11 @@ void perft(game_state& state, int depth, bool color,
                     bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, 
                     rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, 
                     new_occupancy_bitboard, current_depth + 1, zobrist, zobrist_hash,
-                    moves_stack, undo_stack, node_count);
+                    moves_stack, undo_stack, node_count, piece_on_square);
             }
 
             // Undo the move
-            undo_move(state, moves[i], zobrist_hash, zobrist, undo);
+            undo_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
         }
     }
 }
@@ -242,18 +283,19 @@ int main() {
     visualize_game_state(game_state6);
 
     // perft
-    game_state perft_state = initial_game_state;
-    U64 zobrist_hash = init_zobrist_hashing(perft_state, zobrist, false);
+    game_state perft_state = game_state6;
+    std::array<int, 64> piece_on_square;
+    U64 zobrist_hash = init_zobrist_hashing_mailbox(perft_state, zobrist, false, piece_on_square);
     uint64_t node_count = 0;
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    perft(perft_state, 6, false, pawn_move_lookup_table, pawn_attack_lookup_table, 
+    perft(perft_state, 5, false, pawn_move_lookup_table, pawn_attack_lookup_table, 
           knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
           bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
           rook_attack_lookup_table, king_lookup_table, 
           get_occupancy(perft_state.piece_bitboards), 0, zobrist, zobrist_hash, 
-          moves_stack, undo_stack, node_count);
+          moves_stack, undo_stack, node_count, piece_on_square);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;

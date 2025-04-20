@@ -210,10 +210,6 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
             int victim_value = piece_values[victim_index%6];
             int attacker_value = piece_values[moves[i].piece_index%6];
             score = victim_value*10 - attacker_value;
-            //std::cout << "capture" << std::endl;
-            //std::cout << "attacker: " << moves[i].piece_index << std::endl;
-            //std::cout << "victim: " << piece_on_square[moves[i].to_position] << std::endl;
-            //std::cout << "location: " << moves[i].to_position << std::endl;
         }
         
         // check for best move
@@ -242,7 +238,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
         // get the move index from the sorted order
-        int move_index = i;//move_order[i]; // i
+        int move_index = move_order[i];
 
         move_undo& undo = undo_stack[current_depth];
         apply_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
