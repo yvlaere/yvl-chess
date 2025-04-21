@@ -94,18 +94,7 @@ void visualize_game_state(const game_state& state) {
 // perft
 
 void perft(game_state& state, int depth, bool color, 
-    std::array<U64, 128>& pawn_move_lookup_table, 
-    std::array<U64, 128>& pawn_attack_lookup_table, 
-    std::array<U64, 64>& knight_lookup_table, 
-    std::array<U64, 64>& bishop_magics, 
-    std::array<U64, 64>& bishop_mask_lookup_table, 
-    std::array<U64, 64>& bishop_mask_bit_count,
-    std::array<U64, 262144>& bishop_attack_lookup_table, 
-    std::array<U64, 64>& rook_magics, 
-    std::array<U64, 64>& rook_mask_lookup_table,
-    std::array<U64, 64>& rook_mask_bit_count,
-    std::array<U64, 262144>& rook_attack_lookup_table, 
-    std::array<U64, 64>& king_lookup_table,
+    lookup_tables_wrap& lookup_tables,
     const U64& occupancy_bitboard, int current_depth, 
     zobrist_randoms& zobrist, U64& zobrist_hash, 
     std::array<std::array<move, 256>, 256>& moves_stack, 
@@ -120,10 +109,7 @@ void perft(game_state& state, int depth, bool color,
     // Generate pseudo-legal moves
     std::array<move, 256>& moves = moves_stack[current_depth];
     int move_count = pseudo_legal_move_generator(moves, 
-        state, color, pawn_move_lookup_table, pawn_attack_lookup_table, 
-        knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-        bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-        rook_attack_lookup_table, king_lookup_table, 
+        state, color, lookup_tables,
         occupancy_bitboard);
 
     std::array<int, 256> move_order;
@@ -159,14 +145,11 @@ void perft(game_state& state, int depth, bool color,
             apply_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
             
             // Ensure move is legal (not putting king in check)
-            if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, get_occupancy(state.piece_bitboards))) {
+            if (pseudo_to_legal(state, !color, lookup_tables, get_occupancy(state.piece_bitboards))) {
                 
                 U64 new_occupancy_bitboard = get_occupancy(state.piece_bitboards);
 
-                perft(state, depth - 1, !color, pawn_move_lookup_table, 
-                    pawn_attack_lookup_table, knight_lookup_table, bishop_magics, 
-                    bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, 
-                    rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, 
+                perft(state, depth - 1, !color, lookup_tables,
                     new_occupancy_bitboard, current_depth + 1, zobrist, zobrist_hash,
                     moves_stack, undo_stack, node_count, piece_on_square);
             }
@@ -209,24 +192,10 @@ int main() {
     game_state initial_game_state(piece_bitboards, en_passant_bitboards, w_long_castle, w_short_castle, b_long_castle, b_short_castle);
 
     // create lookup tables
-    std::array<U64, 128> pawn_move_lookup_table;
-    std::array<U64, 128> pawn_attack_lookup_table; 
-    std::array<U64, 64> knight_lookup_table; 
-    std::array<U64, 64> bishop_magics;
-    std::array<U64, 64> bishop_mask_lookup_table; 
-    std::array<U64, 64> bishop_mask_bit_count;
-    std::array<U64, 262144> bishop_attack_lookup_table;
-    std::array<U64, 64> rook_magics; 
-    std::array<U64, 64> rook_mask_lookup_table;
-    std::array<U64, 64> rook_mask_bit_count;
-    std::array<U64, 262144> rook_attack_lookup_table;
-    std::array<U64, 64> king_lookup_table;
+    lookup_tables_wrap lookup_tables;
     
 
-    generate_lookup_tables(pawn_move_lookup_table, pawn_attack_lookup_table, 
-        knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-        bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-        rook_attack_lookup_table, king_lookup_table);
+    generate_lookup_tables(lookup_tables);
 
     // create zobrist randoms
     zobrist_randoms zobrist;
@@ -283,17 +252,14 @@ int main() {
     visualize_game_state(game_state6);
 
     // perft
-    game_state perft_state = game_state6;
+    game_state perft_state = initial_game_state;
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(perft_state, zobrist, false, piece_on_square);
     uint64_t node_count = 0;
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    perft(perft_state, 5, false, pawn_move_lookup_table, pawn_attack_lookup_table, 
-          knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-          bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-          rook_attack_lookup_table, king_lookup_table, 
+    perft(perft_state, 6, false, lookup_tables,
           get_occupancy(perft_state.piece_bitboards), 0, zobrist, zobrist_hash, 
           moves_stack, undo_stack, node_count, piece_on_square);
 
