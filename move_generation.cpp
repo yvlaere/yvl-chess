@@ -859,15 +859,15 @@ U64 init_zobrist_hashing_mailbox(game_state &state, zobrist_randoms &zobrist, bo
     }
 
     // populate the mailbox representation
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 12; i++) {
 
         // get the correct piece bitboard
-        U64 piece_bitboard = state.piece_bitboards[i + 6*color];
+        U64 piece_bitboard = state.piece_bitboards[i];
         while (piece_bitboard) {
 
             // get the position of the least significant set bit and remove it from the bitboard
             int position = pop_lsb(piece_bitboard);
-            piece_on_square[position] = i + 6*color;
+            piece_on_square[position] = i;
         }
     }
         

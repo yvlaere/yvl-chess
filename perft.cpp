@@ -156,6 +156,7 @@ void perft(game_state& state, int depth, bool color,
 
             // Undo the move
             undo_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
+
         }
     }
 }
@@ -193,8 +194,6 @@ int main() {
 
     // create lookup tables
     lookup_tables_wrap lookup_tables;
-    
-
     generate_lookup_tables(lookup_tables);
 
     // create zobrist randoms

@@ -2,12 +2,14 @@
 #include <limits>
 #include <string>
 #include <algorithm>
+#include <chrono>
 
 // negamax with alpha-beta pruning, transposition table and move ordering
 
 //global constants
 constexpr int INF = std::numeric_limits<int>::max() / 2;
 constexpr size_t TT_SIZE = 1 << 20;
+constexpr int MAX_DEPTH = 256;
 
 // piece values in centipawns
 constexpr int pawn_value = 100;
@@ -147,12 +149,17 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<std::array<move, 256>, 256>& moves_stack, 
     std::array<move_undo, 256>& undo_stack,
     std::vector<transposition_table_entry>& transposition_table,
-    std::array<int, 64>& piece_on_square) {
+    std::array<int, 64>& piece_on_square,
+    std::array<move, MAX_DEPTH>& pv, int& pv_length) {
 
     if (depth == 0) {
+        pv_length = 0;
         int eval = evaluation(state);
         return color ? -eval : eval;
     }
+
+    std::array<move, MAX_DEPTH> child_pv;
+    int child_pv_length = 0;
 
     // check transposition table for pruning
     U64 TT_index = zobrist_hash & (TT_SIZE - 1);
@@ -230,12 +237,18 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
             // apply negamax
-            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length);
             legal_moves++;
 
             if (score > max_score) {
                 max_score = score;
                 best_move_index = i;
+
+                pv[0] = moves[move_index];
+                for (int i = 0; i < child_pv_length; ++i) {
+                    pv[i+1] = child_pv[i];
+                }
+                pv_length = child_pv_length + 1;
             }
             if (score > alpha) {
                 alpha = score;
@@ -319,7 +332,7 @@ int main() {
 
     // create move object array
     //untill depth 256
-    std::array<std::array<move, 256>, 256> moves_stack;
+    std::array<std::array<move, 256>, MAX_DEPTH> moves_stack;
 
     // create move undo object array
     std::array<move_undo, 256> undo_stack;
@@ -329,6 +342,9 @@ int main() {
     // vector to put it on the heap, otherwize we get a segfault
     std::vector<transposition_table_entry> transposition_table;
     transposition_table.resize(TT_SIZE);
+
+    std::array<move, MAX_DEPTH> root_PV_moves;
+    int root_PV_moves_count = 0;
 
     // initialize
     game_state state = initial_game_state;
@@ -347,6 +363,8 @@ int main() {
     // game loop
     while (true) {
         
+        auto start = std::chrono::high_resolution_clock::now();
+
         int best_score = -INF;
         int best_move_index = 0;
 
@@ -367,7 +385,7 @@ int main() {
             if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
                 // apply negamax !!!from perspective of opponent, so score needs to be negated
 
-                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count);
 
                 // check if it's best move
                 if (score > best_score) {
@@ -383,6 +401,14 @@ int main() {
         apply_move(state, moves[best_move_index], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
         std::cout << "Best move: piece index: " << moves[best_move_index].piece_index << " from: " << moves[best_move_index].from_position << " to: " << moves[best_move_index].to_position << std::endl;
         visualize_game_state(state);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
+        for (int i = 0; i < root_PV_moves_count; ++i) {
+            std::cout << "PV move: " << index_to_chess(root_PV_moves[i].from_position) << " to: " << index_to_chess(root_PV_moves[i].to_position) << std::endl;
+            apply_move(state, root_PV_moves[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
+            visualize_game_state(state);
+        }
 
         // update state
         color = !color;
