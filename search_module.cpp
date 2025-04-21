@@ -1,12 +1,23 @@
 #include "move_generation.h"
 #include <limits>
 #include <string>
-#include <chrono>
+#include <algorithm>
 
-// plain negamax with alpha-beta pruning
+// negamax with alpha-beta pruning, transposition table and move ordering
 
+//global constants
 constexpr int INF = std::numeric_limits<int>::max() / 2;
-constexpr size_t TT_SIZE = 1;
+constexpr size_t TT_SIZE = 1 << 20;
+
+// piece values in centipawns
+constexpr int pawn_value = 100;
+constexpr int knight_value = 320;
+constexpr int bishop_value = 330;
+constexpr int rook_value = 500;
+constexpr int queen_value = 900;
+constexpr int king_value = 20000;
+
+constexpr std::array<int, 6> piece_values = {pawn_value, knight_value, bishop_value, rook_value, queen_value, king_value};
 
 std::string index_to_chess(int index) {
     if (index < 0 || index >= 64) {
@@ -77,16 +88,6 @@ void visualize_game_state(const game_state& state) {
 int evaluation(game_state &state) {
     // basic evaluation with piece square tables, based on the simplified evaluation function on chessprogramming.org
 
-    // piece values in centipawns
-    int pawn_value = 100;
-    int knight_value = 320;
-    int bishop_value = 330;
-    int rook_value = 500;
-    int queen_value = 900;
-    int king_value = 20000;
-
-    std::array<int, 6> piece_values = {pawn_value, knight_value, bishop_value, rook_value, queen_value, king_value};
-
     // piece square tables
     std::array<int, 64> pawn_square_table = {0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, -20, -20, 10, 10, 5, 5, -5, -10, 0, 0, -10, -5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, 5, 10, 25, 25, 10, 5, 5, 10, 10, 20, 30, 30, 20, 10, 10, 50, 50, 50, 50, 50, 50, 50, 50, 0, 0, 0, 0, 0, 0, 0, 0};
     std::array<int, 64> knight_square_table = {-50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 5, 5, 0, -20, -40, -30, 5, 10, 15, 15, 10, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 10, 15, 15, 10, 0, -30, -40, -20, 0, 0, 0, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50};
@@ -123,7 +124,6 @@ int evaluation(game_state &state) {
     }
 
     return score;
-
 }
 
 // transposition tables
@@ -141,53 +141,96 @@ struct transposition_table_entry {
 // fast negamax search with alpha-beta pruning.
 // 'depth' is the remaining search depth, and alpha-beta parameters prune branches.
 int negamax(game_state &state, int depth, int alpha, int beta, bool color, 
-    std::array<U64, 128>& pawn_move_lookup_table, 
-    std::array<U64, 128>& pawn_attack_lookup_table, 
-    std::array<U64, 64>& knight_lookup_table, 
-    std::array<U64, 64>& bishop_magics, 
-    std::array<U64, 64>& bishop_mask_lookup_table, 
-    std::array<U64, 64>& bishop_mask_bit_count,
-    std::array<U64, 262144>& bishop_attack_lookup_table, 
-    std::array<U64, 64>& rook_magics, 
-    std::array<U64, 64>& rook_mask_lookup_table,
-    std::array<U64, 64>& rook_mask_bit_count,
-    std::array<U64, 262144>& rook_attack_lookup_table, 
-    std::array<U64, 64>& king_lookup_table,
+    lookup_tables_wrap& lookup_tables,
     const U64& occupancy_bitboard, int current_depth,
     zobrist_randoms& zobrist, U64& zobrist_hash,
     std::array<std::array<move, 256>, 256>& moves_stack, 
-    std::array<move_undo, 256>& undo_stack) {
+    std::array<move_undo, 256>& undo_stack,
+    std::vector<transposition_table_entry>& transposition_table,
+    std::array<int, 64>& piece_on_square) {
 
     if (depth == 0) {
         int eval = evaluation(state);
         return color ? -eval : eval;
     }
+
+    // check transposition table for pruning
+    U64 TT_index = zobrist_hash & (TT_SIZE - 1);
+    transposition_table_entry& entry = transposition_table[TT_index];
+    move best_move;
+    if (entry.hash == zobrist_hash && entry.depth >= depth) {
+        if (entry.flag == 0) {
+            return entry.score;
+        }
+        else if (entry.flag == 1) {
+            alpha = std::max(alpha, entry.score);
+        }
+        else if (entry.flag == 2) {
+            beta = std::min(beta, entry.score);
+        }
+        if (alpha >= beta) {
+            return entry.score;
+        }
+        best_move = entry.best_move;
+    }
     
     // generate moves from the current position.
     // generate pseudo-legal moves
     std::array<move, 256>& moves = moves_stack[current_depth];
-    int move_count = pseudo_legal_move_generator(
-        moves, state, color, pawn_move_lookup_table, pawn_attack_lookup_table, 
-        knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-        bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-        rook_attack_lookup_table, king_lookup_table, 
-        occupancy_bitboard);
+    int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
 
-    int max_score = -INF;
-    int best_move_index = -1;
-    int legal_moves = 0;
+    std::array<int, 256> move_order;
+    std::array<int, 256> scores;
 
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
 
+        int score = 0;
+
+        // check for capture
+        int victim_index = piece_on_square[moves[i].to_position];
+        if (victim_index > 0) {
+            int victim_value = piece_values[victim_index%6];
+            int attacker_value = piece_values[moves[i].piece_index%6];
+            score = victim_value*10 - attacker_value;
+        }
+        
+        // check for best move
+        if (moves[i].piece_index == best_move.piece_index &&
+            moves[i].from_position == best_move.from_position &&
+            moves[i].to_position == best_move.to_position) {
+            //std::cout << "best move" << std::endl;
+            score += INF;
+        }
+
+        scores[i] = score;
+        move_order[i] = i; // store the index
+    }
+
+    // sort moves based on scores
+    std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
+        return scores[a] > scores[b];
+    });
+
+    int max_score = -INF;
+    int best_move_index = -1;
+    int legal_moves = 0;
+    int original_alpha = alpha;
+    int original_beta = beta;
+
+    // iterate over all pseudo-legal moves
+    for (int i = 0; i < move_count; i++) {
+        // get the move index from the sorted order
+        int move_index = move_order[i];
+
         move_undo& undo = undo_stack[current_depth];
-        apply_move(state, moves[i], zobrist_hash, zobrist, undo);
+        apply_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
         U64 new_occupancy = get_occupancy(state.piece_bitboards);
 
         // ensure move is legal (not putting king in check)
-        if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, new_occupancy)) {
+        if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
             // apply negamax
-            int score = -negamax(state, depth - 1, -beta, -alpha, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack);
+            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
             legal_moves++;
 
             if (score > max_score) {
@@ -199,19 +242,19 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
             }
             if (alpha >= beta) {
                 // Undo the move
-                undo_move(state, moves[i], zobrist_hash, zobrist, undo);
+                undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
                 break;
             }
         }
 
         // Undo the move
-        undo_move(state, moves[i], zobrist_hash, zobrist, undo);
+        undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
     }
 
     // terminal node: checkmate or stalemate.
     if (legal_moves == 0) {
         // king is attacked: checkmate
-        if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, occupancy_bitboard)) {
+        if (pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard)) {
             // stalemate
             return 0;
         }
@@ -219,6 +262,19 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
             // checkmate
             return -INF;
         }
+    }
+
+    // store the result in the transposition table
+    entry.hash = zobrist_hash;
+    entry.depth = depth;
+    entry.score = max_score;
+    entry.best_move = moves[best_move_index];
+    entry.flag = 0; // exact score
+    if (max_score <= original_alpha) {
+        entry.flag = 2; // beta cutoff
+    }
+    else if (max_score >= original_beta) {
+        entry.flag = 1; // alpha cutoff
     }
     
     return max_score;
@@ -255,23 +311,8 @@ int main() {
     game_state initial_game_state(piece_bitboards, en_passant_bitboards, w_long_castle, w_short_castle, b_long_castle, b_short_castle);
 
     // create lookup tables
-    std::array<U64, 128> pawn_move_lookup_table;
-    std::array<U64, 128> pawn_attack_lookup_table; 
-    std::array<U64, 64> knight_lookup_table; 
-    std::array<U64, 64> bishop_magics;
-    std::array<U64, 64> bishop_mask_lookup_table; 
-    std::array<U64, 64> bishop_mask_bit_count;
-    std::array<U64, 262144> bishop_attack_lookup_table;
-    std::array<U64, 64> rook_magics; 
-    std::array<U64, 64> rook_mask_lookup_table;
-    std::array<U64, 64> rook_mask_bit_count;
-    std::array<U64, 262144> rook_attack_lookup_table;
-    std::array<U64, 64> king_lookup_table;
-
-    generate_lookup_tables( pawn_move_lookup_table, pawn_attack_lookup_table, 
-        knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-        bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-        rook_attack_lookup_table, king_lookup_table);
+    lookup_tables_wrap lookup_tables;
+    generate_lookup_tables(lookup_tables);
 
     // create zobrist randoms
     zobrist_randoms zobrist;
@@ -283,9 +324,16 @@ int main() {
     // create move undo object array
     std::array<move_undo, 256> undo_stack;
 
+    // create transposition table
+    // get transposition table index like this: hash & (TT_SIZE - 1)
+    // vector to put it on the heap, otherwize we get a segfault
+    std::vector<transposition_table_entry> transposition_table;
+    transposition_table.resize(TT_SIZE);
+
     // initialize
     game_state state = initial_game_state;
-    U64 zobrist_hash = init_zobrist_hashing(state, zobrist, false);
+    std::array<int, 64> piece_on_square;
+    U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
     int best_score;
     int best_move_index = 0;
@@ -296,12 +344,6 @@ int main() {
     std::cout << "Initial game state:" << std::endl;
     visualize_game_state(state);
 
-    //std::cout << "evaluation" << std::endl;
-    //std::cout << evaluation(initial_game_state) << std::endl;
-
-    //int score = negamax(initial_game_state, 2, -INF, INF, color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_attack_lookup_table, king_lookup_table, occupancy_bitboard);
-    //std::cout << score << std::endl;
-
     // game loop
     while (true) {
         
@@ -309,28 +351,23 @@ int main() {
         int best_move_index = 0;
 
         // generate pseudo-legal moves
-        auto start = std::chrono::high_resolution_clock::now();
         std::array<move, 256> moves;
         int move_count = pseudo_legal_move_generator(
-            moves, state, color, pawn_move_lookup_table, pawn_attack_lookup_table, 
-            knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-            bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-            rook_attack_lookup_table, king_lookup_table, 
-            occupancy_bitboard);
+            moves, state, color, lookup_tables, occupancy_bitboard);
 
         // iterate over all pseudo-legal moves
         for (int i = 0; i < move_count; i++) {
 
             // negamax needs to start at depth 1 because depth 0 is here
             move_undo& undo = undo_stack[0];
-            apply_move(state, moves[i], zobrist_hash, zobrist, undo);
+            apply_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
             U64 new_occupancy = get_occupancy(state.piece_bitboards);
 
             // ensure move is legal (not putting king in check)
-            if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, new_occupancy)) {
+            if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
                 // apply negamax !!!from perspective of opponent, so score needs to be negated
 
-                int score = -negamax(state, negamax_depth, -INF, INF, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack);
+                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
 
                 // check if it's best move
                 if (score > best_score) {
@@ -340,17 +377,12 @@ int main() {
             }
 
             // Undo the move
-            undo_move(state, moves[i], zobrist_hash, zobrist, undo);
+            undo_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
         }
         std::cout << "Best score: " << best_score << std::endl;
-        apply_move(state, moves[best_move_index], zobrist_hash, zobrist, undo_stack[0]);
+        apply_move(state, moves[best_move_index], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
+        std::cout << "Best move: piece index: " << moves[best_move_index].piece_index << " from: " << moves[best_move_index].from_position << " to: " << moves[best_move_index].to_position << std::endl;
         visualize_game_state(state);
-        std::cout << "move" << std::endl;
-        std::cout << "Piece index: " << moves[best_move_index].piece_index << " from: " << moves[best_move_index].from_position << " to: " << moves[best_move_index].to_position << std::endl;
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> duration = end - start;
-        std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
-
 
         // update state
         color = !color;
@@ -360,25 +392,21 @@ int main() {
         // generate pseudo-legal moves
         std::array<move, 256> moves2;
         int move_count2 = pseudo_legal_move_generator(
-            moves2, state, color, pawn_move_lookup_table, pawn_attack_lookup_table, 
-            knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count,
-            bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count,
-            rook_attack_lookup_table, king_lookup_table, 
-            occupancy_bitboard);
+            moves2, state, color, lookup_tables, occupancy_bitboard);
 
         // iterate over all pseudo-legal moves
         for (int i = 0; i < move_count2; i++) {
 
-            apply_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0]);
+            apply_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
             U64 new_occupancy = get_occupancy(state.piece_bitboards);
 
             // ensure move is legal (not putting king in check)
-            if (pseudo_to_legal(state, !color, pawn_move_lookup_table, pawn_attack_lookup_table, knight_lookup_table, bishop_magics, bishop_mask_lookup_table, bishop_mask_bit_count, bishop_attack_lookup_table, rook_magics, rook_mask_lookup_table, rook_mask_bit_count, rook_attack_lookup_table, king_lookup_table, new_occupancy)) {
+            if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
                 std::cout << "from: " << index_to_chess(moves2[i].from_position) << " to: " << index_to_chess(moves2[i].to_position) << " move index: " << i << std::endl;
             }
 
             // Undo the move
-            undo_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0]);
+            undo_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
         }
 
         // ask for move
@@ -386,7 +414,7 @@ int main() {
         std::cout << "Move: ";
         std::cin >> player_move;
 
-        apply_move(state, moves2[player_move], zobrist_hash, zobrist, undo_stack[0]);
+        apply_move(state, moves2[player_move], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
         visualize_game_state(state);
 
         // update state
