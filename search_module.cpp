@@ -167,6 +167,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     move best_move;
     if (entry.hash == zobrist_hash && entry.depth >= depth) {
         if (entry.flag == 0) {
+            pv[0] = entry.best_move;
+            pv_length = 1;
             return entry.score;
         }
         else if (entry.flag == 1) {
@@ -176,6 +178,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
             beta = std::min(beta, entry.score);
         }
         if (alpha >= beta) {
+            pv[0] = entry.best_move;
+            pv_length = 1;
             return entry.score;
         }
         best_move = entry.best_move;
@@ -245,8 +249,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
                 best_move_index = i;
 
                 pv[0] = moves[move_index];
-                for (int i = 0; i < child_pv_length; ++i) {
-                    pv[i+1] = child_pv[i];
+                for (int j = 0; j < child_pv_length; ++j) {
+                    pv[j + 1] = child_pv[j];
                 }
                 pv_length = child_pv_length + 1;
             }
@@ -254,6 +258,12 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
                 alpha = score;
             }
             if (alpha >= beta) {
+                pv[0] = moves[move_index];
+                for (int j = 0; j < child_pv_length; ++j) {
+                    pv[j + 1] = child_pv[j];
+                }
+                pv_length = child_pv_length + 1;
+
                 // Undo the move
                 undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
                 break;
@@ -345,6 +355,8 @@ int main() {
 
     std::array<move, MAX_DEPTH> root_PV_moves;
     int root_PV_moves_count = 0;
+    std::array<move, MAX_DEPTH> best_PV_moves_array;
+    int best_PV_moves_count = 0;
 
     // initialize
     game_state state = initial_game_state;
@@ -391,6 +403,8 @@ int main() {
                 if (score > best_score) {
                     best_score = score;
                     best_move_index = i;
+                    best_PV_moves_count   = root_PV_moves_count;
+                    best_PV_moves_array   = root_PV_moves;   // copy out the array
                 }
             }
 
@@ -404,9 +418,10 @@ int main() {
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration = end - start;
         std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
-        for (int i = 0; i < root_PV_moves_count; ++i) {
-            std::cout << "PV move: " << index_to_chess(root_PV_moves[i].from_position) << " to: " << index_to_chess(root_PV_moves[i].to_position) << std::endl;
-            apply_move(state, root_PV_moves[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
+        std::cout << "PV length: " << best_PV_moves_count << std::endl;
+        for (int i = 0; i < best_PV_moves_count; ++i) {
+            std::cout << "PV move: " << index_to_chess(best_PV_moves_array[i].from_position) << " to: " << index_to_chess(best_PV_moves_array[i].to_position) << " piece index: " << best_PV_moves_array[i].piece_index << std::endl;
+            apply_move(state, best_PV_moves_array[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
             visualize_game_state(state);
         }
 
