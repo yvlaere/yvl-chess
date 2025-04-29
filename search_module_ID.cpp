@@ -298,6 +298,48 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     return max_score;
 }
 
+void iterative_deepening(game_state &state, int max_depth, bool color,
+    lookup_tables_wrap& lookup_tables, U64& occupancy_bitboard,
+    zobrist_randoms& zobrist, U64& zobrist_hash,
+    std::array<std::array<move, 256>, 256>& moves_stack, 
+    std::array<move_undo, 256>& undo_stack, 
+    std::vector<transposition_table_entry>& transposition_table,
+    std::array<int, 64> piece_on_square) {
+
+    int best_score = -INF;
+    int best_move_index = 0;
+
+    int root_PV_moves_count = 0;
+    std::array<move, MAX_DEPTH> root_PV_moves;
+
+    // iterate over all depths
+    for (int negamax_depth = 1; negamax_depth <= max_depth; negamax_depth++) {
+        std::cout << "Searching depth: " << negamax_depth << std::endl;
+        
+        // apply negamax
+        best_score = -negamax(state, negamax_depth, -INF, INF, color, lookup_tables, occupancy_bitboard, 0, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count);
+    
+        // print temporary best move
+        std::cout << "Best move: " << index_to_chess(root_PV_moves[0].to_position) << std::endl;
+        std::cout << "Best score: " << best_score << std::endl;
+        std::cout << "Best move: piece index: " << root_PV_moves[0].piece_index << " from: " << root_PV_moves[0].from_position << " to: " << root_PV_moves[0].to_position << std::endl;
+    }
+    
+    // print best move
+    std::cout << "Best move: " << index_to_chess(root_PV_moves[0].to_position) << std::endl;
+    std::cout << "Best score: " << best_score << std::endl;
+    std::cout << "Best move: piece index: " << root_PV_moves[0].piece_index << " from: " << root_PV_moves[0].from_position << " to: " << root_PV_moves[0].to_position << std::endl;
+    
+
+    // update state
+    color = !color;
+    occupancy_bitboard = get_occupancy(state.piece_bitboards);
+    apply_move(state, root_PV_moves[0], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
+    
+    
+    visualize_game_state(state);  
+}
+
 int main() {
     // initial game state
     // convention: least significant bit (rightmost bit) is A1
@@ -361,7 +403,7 @@ int main() {
     int best_score;
     int best_move_index = 0;
     bool color = false;
-    int negamax_depth = 7;
+    int negamax_depth = 8;
 
     // visualize initial game state
     std::cout << "Initial game state:" << std::endl;
@@ -372,57 +414,11 @@ int main() {
         
         auto start = std::chrono::high_resolution_clock::now();
 
-        int best_score = -INF;
-        int best_move_index = 0;
-
-        // generate pseudo-legal moves
-        std::array<move, 256> moves;
-        int move_count = pseudo_legal_move_generator(
-            moves, state, color, lookup_tables, occupancy_bitboard);
-
-        // iterate over all pseudo-legal moves
-        for (int i = 0; i < move_count; i++) {
-
-            // negamax needs to start at depth 1 because depth 0 is here
-            move_undo& undo = undo_stack[0];
-            apply_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
-            U64 new_occupancy = get_occupancy(state.piece_bitboards);
-
-            // ensure move is legal (not putting king in check)
-            if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
-                // apply negamax !!!from perspective of opponent, so score needs to be negated
-
-                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count);
-
-                // check if it's best move
-                if (score > best_score) {
-                    best_score = score;
-                    best_move_index = i;
-                    best_PV_moves_count   = root_PV_moves_count;
-                    best_PV_moves_array   = root_PV_moves;   // copy out the array
-                }
-            }
-
-            // Undo the move
-            undo_move(state, moves[i], zobrist_hash, zobrist, undo, piece_on_square);
-        }
-        std::cout << "Best score: " << best_score << std::endl;
-        apply_move(state, moves[best_move_index], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
-        std::cout << "Best move: piece index: " << moves[best_move_index].piece_index << " from: " << moves[best_move_index].from_position << " to: " << moves[best_move_index].to_position << std::endl;
-        visualize_game_state(state);
+        iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+        
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> duration = end - start;
         std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
-        std::cout << "PV length: " << best_PV_moves_count << std::endl;
-        for (int i = 0; i < best_PV_moves_count; ++i) {
-            std::cout << "PV move: " << index_to_chess(best_PV_moves_array[i].from_position) << " to: " << index_to_chess(best_PV_moves_array[i].to_position) << " piece index: " << best_PV_moves_array[i].piece_index << std::endl;
-            apply_move(state, best_PV_moves_array[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
-            visualize_game_state(state);
-        }
-
-        // update state
-        color = !color;
-        occupancy_bitboard = get_occupancy(state.piece_bitboards);
 
         // other player plays
         // generate pseudo-legal moves
