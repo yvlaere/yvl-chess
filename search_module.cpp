@@ -246,7 +246,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
             if (score > max_score) {
                 max_score = score;
-                best_move_index = i;
+                best_move_index = move_index;
 
                 pv[0] = moves[move_index];
                 for (int j = 0; j < child_pv_length; ++j) {

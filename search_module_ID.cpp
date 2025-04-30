@@ -318,6 +318,7 @@ void iterative_deepening(game_state& state, int max_depth, bool color,
     // iterate over all depths
     for (int negamax_depth = 0; negamax_depth <= max_depth; negamax_depth++) {
         std::cout << "Searching depth: " << negamax_depth << std::endl;
+        
 
         // initialize PV array
         int root_PV_moves_count = 0;
@@ -353,10 +354,14 @@ void iterative_deepening(game_state& state, int max_depth, bool color,
         std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
             return scores[a] > scores[b];
         });
+
+        auto start = std::chrono::high_resolution_clock::now();
         
         // apply negamax
         int max_score = -INF;
         //int best_move_index = -1;
+
+        std::cout << "first move: " << index_to_chess(moves[move_order[0]].to_position) << " Piece index: " << moves[move_order[0]].piece_index << std::endl;
 
         // iterate over all pseudo-legal moves
         for (int i = 0; i < move_count; i++) {
@@ -380,6 +385,8 @@ void iterative_deepening(game_state& state, int max_depth, bool color,
                     for (int j = 0; j < root_PV_moves_count; ++j) {
                         best_PV_moves[j + 1] = root_PV_moves[j];
                     }
+
+                    std::cout << "Best temp move: " << index_to_chess(moves[move_index].to_position) << " Piece index: " << moves[move_index].piece_index<< std::endl;
                 }
             }
 
@@ -387,10 +394,15 @@ void iterative_deepening(game_state& state, int max_depth, bool color,
             undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
         }
 
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start;
+        std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
+
         // print temporary best move
         std::cout << "Best move: " << index_to_chess(best_PV_moves[0].to_position) << std::endl;
         std::cout << "Best score: " << max_score << std::endl;
         std::cout << "Best move: piece index: " << best_PV_moves[0].piece_index << " from: " << best_PV_moves[0].from_position << " to: " << best_PV_moves[0].to_position << std::endl;
+        
     }
     
     // print best move
@@ -462,7 +474,7 @@ int main() {
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 7;
+    int negamax_depth = 6;
     bool color = false;
 
     // visualize initial game state
