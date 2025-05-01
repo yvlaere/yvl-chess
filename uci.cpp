@@ -1,5 +1,6 @@
 #include "search_module.h"
 #include <string>
+#include <sstream>
 
 // make my engine UCI compliant
 
@@ -10,8 +11,59 @@ std::string move_to_long_algebraic(move m) {
     char to_file = 'a' + (m.to_position % 8);
     char to_rank = '1' + (m.to_position / 8);
 
-    return std::string(1, from_file) + std::string(1, from_rank) +
+    std::string move_string = std::string(1, from_file) + std::string(1, from_rank) +
            std::string(1, to_file) + std::string(1, to_rank);
+
+    if (m.promotion_piece_index != m.piece_index) {
+        char promotion_piece = 'n';
+        if (m.promotion_piece_index == 2 || m.promotion_piece_index == 8) {
+            promotion_piece = 'r';
+        } else if (m.promotion_piece_index == 3 || m.promotion_piece_index == 9) {
+            promotion_piece = 'b';
+        } else if (m.promotion_piece_index == 4 || m.promotion_piece_index == 10) {
+            promotion_piece = 'q';
+        }
+
+        move_string += promotion_piece;
+    }
+
+    return move_string;
+}
+
+void fen_to_game_state(const std::string& fen, game_state& state) {
+    // parse FEN string and update the game state
+    
+    int rank = 7;
+    // iterate over the FEN string
+    for(const char& c : fen) {
+        if (c == ' ') {
+            break; // end of piece placement
+        }
+        else if (c >= '1' && c <= '8') {
+            rank -= c - '0'; // skip squares
+        }
+        else if (c == '/') {
+            continue; // skip rank separator
+        }
+        else {
+            int piece_index = -1;
+            switch (c) {
+                case 'P': piece_index = 0; break; // white pawn
+                case 'N': piece_index = 1; break; // white knight
+                case 'B': piece_index = 2; break; // white bishop
+                case 'R': piece_index = 3; break; // white rook
+                case 'Q': piece_index = 4; break; // white queen
+                case 'K': piece_index = 5; break; // white king
+                case 'p': piece_index = 6; break; // black pawn
+                case 'n': piece_index = 7; break; // black knight
+                case 'b': piece_index = 8; break; // black bishop
+                case 'r': piece_index = 9; break; // black rook
+                case 'q': piece_index = 10; break;// black queen
+                case 'k': piece_index = 11; break;// black king
+            }
+            state.piece_bitboards[piece_index] |= (1ULL << (rank * 8 + (c - 'a')));
+        }
+    }
 }
 
 int main() {
@@ -76,52 +128,64 @@ int main() {
     std::cout << "Initial game state:" << std::endl;
     visualize_game_state(state);
 
-    // game loop
+
+
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    std::string fen2 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
+    std::string fen3 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    std::string fen4 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
+    visualize_game_state(fen_to_game_state(fen1));
+    visualize_game_state(fen_to_game_state(fen2));
+    visualize_game_state(fen_to_game_state(fen3));
+    visualize_game_state(fen_to_game_state(fen4));
+
+    // UCI loop
     while (true) {
         
-        auto start = std::chrono::high_resolution_clock::now();
+        std::string command;
+        std::cin >> command;
 
-        iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+        // split command into subcommands
+        std::string subcommand;
+        std::stringstream ss(command);
+        std::vector<std::string> sub_commands;
+        while (getline(ss, subcommand, ' ')) {
+            sub_commands.push_back(subcommand);
+        }
         
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> duration = end - start;
-        std::cout << "Time taken: " << duration.count() << " ms" << std::endl;
-
-        // other player plays
-        color = !color;
-        // generate pseudo-legal moves
-        std::array<move, 256> moves2;
-        int move_count2 = pseudo_legal_move_generator(
-            moves2, state, color, lookup_tables, occupancy_bitboard);
-
-        // iterate over all pseudo-legal moves
-        for (int i = 0; i < move_count2; i++) {
-
-            apply_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
-            U64 new_occupancy = get_occupancy(state.piece_bitboards);
-
-            // ensure move is legal (not putting king in check)
-            if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
-                std::cout << "from: " << index_to_chess(moves2[i].from_position) << " to: " << index_to_chess(moves2[i].to_position) << " move index: " << i << std::endl;
-            }
-
-            // Undo the move
-            undo_move(state, moves2[i], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
+        if (sub_commands[0] == "uci") {
+            std::cout << "id name yvl-bot" << std::endl;
+            std::cout << "id author yvl" << std::endl;
+            std::cout << "uciok" << std::endl;
+            continue;
+        }
+        else if (sub_commands[0] == "isready") {
+            std::cout << "readyok" << std::endl;
+            continue;
+        }
+        else if (sub_commands[0] == "quit") {
+            break;
+        }
+        else if (sub_commands[0] == "ucinewgame") {
+            // reset the game state
+            state = initial_game_state;
+            zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
+            occupancy_bitboard = get_occupancy(state.piece_bitboards);
+            continue;
         }
 
-        // ask for move
-        int player_move;
-        std::cout << "Move: ";
-        std::cin >> player_move;
-
-        apply_move(state, moves2[player_move], zobrist_hash, zobrist, undo_stack[0], piece_on_square);
-        visualize_game_state(state);
-
-        // update state
-        color = !color;
-        occupancy_bitboard = get_occupancy(state.piece_bitboards);
-
+        else if (sub_commands[0] == "position") {
+            if (sub_commands[1] == "startpos") {
+                // reset the game state
+                state = initial_game_state;
+                zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
+                occupancy_bitboard = get_occupancy(state.piece_bitboards);
+            }
+            else if (sub_commands[1] == "fen") {
+                // handle FEN string
+                std::string fen_string = sub_commands[2];
+            }
+        }
     }
-
     return 0;
 }
