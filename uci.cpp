@@ -30,20 +30,30 @@ std::string move_to_long_algebraic(move m) {
     return move_string;
 }
 
-void fen_to_game_state(const std::string& fen, game_state& state) {
+game_state fen_to_game_state(const std::string& fen, bool& color) {
     // parse FEN string and update the game state
     
+    // create empty game state
+    game_state state({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0}, false, false, false, false);
+
+    // parse the FEN string
+    std::string sub_fen;
+    std::stringstream ss(fen);
+    std::vector<std::string> sub_fen_elements;
+    while (getline(ss, sub_fen, ' ')) {
+        sub_fen_elements.push_back(sub_fen);
+    }
+
     int rank = 7;
+    int file = 0;
     // iterate over the FEN string
-    for(const char& c : fen) {
-        if (c == ' ') {
-            break; // end of piece placement
-        }
-        else if (c >= '1' && c <= '8') {
-            rank -= c - '0'; // skip squares
+    for(const char& c : sub_fen_elements[0]) {
+        if (c >= '1' && c <= '8') {
+            file += c - '0'; // skip squares
         }
         else if (c == '/') {
-            continue; // skip rank separator
+            rank -= 1;
+            file = 0; // reset file
         }
         else {
             int piece_index = -1;
@@ -58,12 +68,35 @@ void fen_to_game_state(const std::string& fen, game_state& state) {
                 case 'n': piece_index = 7; break; // black knight
                 case 'b': piece_index = 8; break; // black bishop
                 case 'r': piece_index = 9; break; // black rook
-                case 'q': piece_index = 10; break;// black queen
-                case 'k': piece_index = 11; break;// black king
+                case 'q': piece_index = 10; break; // black queen
+                case 'k': piece_index = 11; break; // black king
             }
-            state.piece_bitboards[piece_index] |= (1ULL << (rank * 8 + (c - 'a')));
+            state.piece_bitboards[piece_index] |= (1ULL << (rank*8 + file));
+            file += 1; // move to the next file
         }
     }
+
+    // color
+    color = (sub_fen_elements[1] == "w") ? true : false;
+
+    // castling rights
+    for(const char& c : sub_fen_elements[2]) {
+        switch (c) {
+            case 'K': state.w_short_castle = true; break;
+            case 'Q': state.w_long_castle = true; break;
+            case 'k': state.b_short_castle = true; break;
+            case 'q': state.b_long_castle = true; break;
+        }
+    }
+    
+    // en passant
+    if (sub_fen_elements[3] != "-") {
+        int file = sub_fen_elements[3][0] - 'a';
+        int rank = sub_fen_elements[3][1] - '1';
+        state.en_passant_bitboards[color] = (1ULL << (rank*8 + file));
+    }
+
+    return state;
 }
 
 int main() {
@@ -124,33 +157,18 @@ int main() {
     int negamax_depth = 6;
     bool color = false;
 
-    // visualize initial game state
-    std::cout << "Initial game state:" << std::endl;
-    visualize_game_state(state);
-
-
-
-    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    std::string fen2 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
-    std::string fen3 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    std::string fen4 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
-    visualize_game_state(fen_to_game_state(fen1));
-    visualize_game_state(fen_to_game_state(fen2));
-    visualize_game_state(fen_to_game_state(fen3));
-    visualize_game_state(fen_to_game_state(fen4));
-
     // UCI loop
     while (true) {
         
         std::string command;
-        std::cin >> command;
+        std::getline(std::cin, command);
 
         // split command into subcommands
         std::string subcommand;
         std::stringstream ss(command);
         std::vector<std::string> sub_commands;
-        while (getline(ss, subcommand, ' ')) {
-            sub_commands.push_back(subcommand);
+        for (std::string sub_command; ss >> sub_command;) {
+            sub_commands.push_back(sub_command);
         }
         
         if (sub_commands[0] == "uci") {
@@ -173,19 +191,67 @@ int main() {
             occupancy_bitboard = get_occupancy(state.piece_bitboards);
             continue;
         }
-
         else if (sub_commands[0] == "position") {
             if (sub_commands[1] == "startpos") {
                 // reset the game state
                 state = initial_game_state;
                 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
                 occupancy_bitboard = get_occupancy(state.piece_bitboards);
+                color = false;
             }
             else if (sub_commands[1] == "fen") {
                 // handle FEN string
-                std::string fen_string = sub_commands[2];
+                
+                // construct the FEN string
+                std::string fen_string;
+                for (int i = 2; i < sub_commands.size(); i++) {
+                    std::string fen_part;
+                    fen_part = sub_commands[2 + i];
+                    if (fen_part == "moves") {
+                        break;
+                    }
+                    else {
+                        fen_string += fen_part + " ";
+                    }
+                }
+
+                state = fen_to_game_state(fen_string, color);
+                zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, color, piece_on_square);
+                occupancy_bitboard = get_occupancy(state.piece_bitboards);
+            }
+            for (int i = 2; i < sub_commands.size(); i++) {
+                if (sub_commands[i] == "moves") {
+                    // handle moves
+                    for (int j = i + 1; j < sub_commands.size(); j++) {
+                        std::string move_string = sub_commands[j];
+
+                        // generate all moves
+                        std::array<move, 256> moves;
+                        int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
+                        for (int k = 0; k < move_count; k++) {
+                            std::string move_string = move_to_long_algebraic(moves[k]);
+                            if (move_string == sub_commands[j]) {
+                                // apply move
+                                move_undo undo;
+                                apply_move(state, moves[k], zobrist_hash, zobrist, undo, piece_on_square);
+                                color = !color;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
+        else if (sub_commands[0] == "go") {
+            // start the search
+
+            int max_depth = 6;
+
+            U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
+            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+            std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
+        }
     }
+    visualize_game_state(state);
     return 0;
 }

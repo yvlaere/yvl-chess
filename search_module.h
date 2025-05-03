@@ -49,7 +49,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<int, 64>& piece_on_square,
     std::array<move, MAX_DEPTH>& pv, int& pv_length);
 
-void iterative_deepening(game_state& state, int max_depth, bool color,
+move iterative_deepening(game_state& state, int max_depth, bool color,
     lookup_tables_wrap& lookup_tables, U64& occupancy_bitboard,
     zobrist_randoms& zobrist, U64& zobrist_hash,
     std::array<std::array<move, 256>, 256>& moves_stack, 
