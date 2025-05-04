@@ -154,7 +154,7 @@ int main() {
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 6;
+    int negamax_depth = 5;
     bool color = false;
 
     // UCI loop
@@ -227,6 +227,7 @@ int main() {
 
                         // generate all moves
                         std::array<move, 256> moves;
+                        U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
                         int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
                         for (int k = 0; k < move_count; k++) {
                             std::string move_string = move_to_long_algebraic(moves[k]);
@@ -252,6 +253,6 @@ int main() {
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }
-    visualize_game_state(state);
+
     return 0;
 }

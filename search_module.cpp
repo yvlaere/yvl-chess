@@ -273,6 +273,9 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::vector<transposition_table_entry>& transposition_table,
     std::array<int, 64> piece_on_square) {
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+    int time_limit_ms = 1000;
+
     std::array<move, 256>& moves = moves_stack[0];
     int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
 
@@ -284,6 +287,13 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
 
     // iterate over all depths
     for (int negamax_depth = 0; negamax_depth <= max_depth; negamax_depth++) {
+
+        auto current_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = current_time - start_time;
+
+        if (elapsed.count() > time_limit_ms) {
+            break;
+        }
 
         // initialize PV array
         int root_PV_moves_count = 0;
