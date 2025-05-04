@@ -31,6 +31,8 @@ Rank Name                          Elo     +/-   Games   Score    Draw
    3 SF1600                         35     155      20   55.0%   10.0%
    4 SF1400                       -382     nan      20   10.0%   10.0%
 
+The chess engine is available on lichess as yvl-bot.
+
 ## Compilation
 Compile the engine as follows:
 ```g++ uci.cpp search_module.cpp move_generation.cpp -O3 -o yvl-bot```
