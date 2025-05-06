@@ -1,5 +1,5 @@
 # chess_engine
-UCI-compliant chess engine written in C++.
+UCI-compliant chess engine written in C++
 
 ## Move generation
 Moves are generated using bitboard attack lookup tables and magic bitboards. Moves are made and unmade. Details in jupyter notebooks.
@@ -23,13 +23,14 @@ Most valuable victim - least valuable attacker. Moves are sorted to evaluate cap
 The search function is used with increasing depth. The best move of the previous iteration is used for ordering moves in the next iteration, increasing branch pruning by causing earlier beta cutoffs.
 
 ## Strength
-The chess engine was evaluated using cutechess-cli in a gauntlet against multiple instances of stockfish, with their elo set at 1400, 1600, 1700 and 1800.
-Rank Name                          Elo     +/-   Games   Score    Draw
-   0 yvl-bot                       -26      74      80   46.3%    7.5%
-   1 SF1800                        338     nan      20   87.5%    5.0%
-   2 SF1700                         89     167      20   62.5%    5.0%
-   3 SF1600                         35     155      20   55.0%   10.0%
-   4 SF1400                       -382     nan      20   10.0%   10.0%
+The chess engine was evaluated using cutechess-cli in a gauntlet against multiple instances of stockfish, with their elo set at 1600, 1700, 1800 and 1900. Averaging out the elo values for each one of the opponents results in an elo of 1 628.25
+|Rank | Name |                         Elo |    +/-  | Games |  Score  |  Draw
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | yvl-bot |                      -57  |    76   |   80 |  41.9%  |  6.3%
+| 1 | SF1800  |                      215  |   223   |   20 |  77.5%  |  5.0%
+| 2 | SF1900  |                       168  |   193   |   20 |  72.5%  |  5.0%
+| 3 | SF1700  |                       -35  |   155   |   20 |  45.0%  | 10.0%
+| 4 | SF1600  |                     -89  |   167   |   20 |  37.5%  | 5.0%
 
 The chess engine is available on lichess as yvl-bot.
 
