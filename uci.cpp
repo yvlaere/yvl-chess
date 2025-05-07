@@ -17,9 +17,9 @@ std::string move_to_long_algebraic(move m) {
     if (m.promotion_piece_index != m.piece_index) {
         char promotion_piece = 'n';
         if (m.promotion_piece_index == 2 || m.promotion_piece_index == 8) {
-            promotion_piece = 'r';
-        } else if (m.promotion_piece_index == 3 || m.promotion_piece_index == 9) {
             promotion_piece = 'b';
+        } else if (m.promotion_piece_index == 3 || m.promotion_piece_index == 9) {
+            promotion_piece = 'r';
         } else if (m.promotion_piece_index == 4 || m.promotion_piece_index == 10) {
             promotion_piece = 'q';
         }
