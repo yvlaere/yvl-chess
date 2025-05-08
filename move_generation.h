@@ -65,10 +65,10 @@ struct zobrist_randoms {
 
 // move object
 struct move {
-    int piece_index;
-    int from_position;
-    int to_position;
-    int promotion_piece_index;
+    uint8_t piece_index;
+    uint8_t from_position;
+    uint8_t to_position;
+    uint8_t promotion_piece_index;
     bool en_passantable;
     bool castling;
 
@@ -76,8 +76,8 @@ struct move {
     move() : piece_index(-1), from_position(-1), to_position(-1), promotion_piece_index(-1), en_passantable(false), castling(false) {}
 
     // constructor
-    move(int piece_index, int from_position, int to_position, 
-        int promotion_piece_index, bool en_passantable, bool castling) 
+    move(uint8_t piece_index, uint8_t from_position, uint8_t to_position, 
+        uint8_t promotion_piece_index, bool en_passantable, bool castling) 
        : piece_index(piece_index), from_position(from_position), to_position(to_position), 
          promotion_piece_index(promotion_piece_index), en_passantable(en_passantable), castling(castling) {}
 };

@@ -8,7 +8,7 @@
 
 //global constants
 constexpr int INF = std::numeric_limits<int>::max() / 2;
-constexpr size_t TT_SIZE = 1 << 20;
+constexpr size_t TT_SIZE = 1 << 22;
 constexpr int MAX_DEPTH = 256;
 
 // piece values in centipawns
@@ -24,9 +24,9 @@ constexpr std::array<int, 6> piece_values = {pawn_value, knight_value, bishop_va
 // transposition tables
 struct transposition_table_entry {
     U64 hash;
-    int depth;
+    uint8_t depth;
     int score;
-    int flag; // 0: exact, 1: alpha, 2: beta
+    uint8_t flag; // 0: exact, 1: alpha, 2: beta
     move best_move;
 };
 
