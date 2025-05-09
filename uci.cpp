@@ -149,12 +149,19 @@ int main() {
     std::vector<transposition_table_entry> transposition_table;
     transposition_table.resize(TT_SIZE);
 
+    // killer_moves
+    // storing 2 killer moves for each depth (then no iteration over the array is needed, only one check needs to be done)
+    std::array<std::array<move, 2>, MAX_DEPTH> killer_moves;
+
+    // history heuristic
+    std::array<std::array<int, 64>, 64> history_moves;
+
     // initialize
     game_state state = initial_game_state;
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 5;
+    int negamax_depth = 7;
     bool color = false;
 
     // UCI loop
@@ -249,7 +256,7 @@ int main() {
             int max_depth = 6;
 
             U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square);
+            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves);
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }

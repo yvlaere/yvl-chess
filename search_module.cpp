@@ -118,7 +118,9 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<move_undo, 256>& undo_stack,
     std::vector<transposition_table_entry>& transposition_table,
     std::array<int, 64>& piece_on_square,
-    std::array<move, MAX_DEPTH>& pv, int& pv_length) {
+    std::array<move, MAX_DEPTH>& pv, int& pv_length,
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
+    std::array<std::array<int, 64>, 64>& history_moves) {
 
     if (depth == 0) {
         pv_length = 0;
@@ -160,25 +162,43 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
     std::array<int, 256> move_order;
     std::array<int, 256> scores;
+    int num_non_quiet = 0;
 
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
 
         int score = 0;
-
-        // check for capture
         int victim_index = piece_on_square[moves[i].to_position];
-        if (victim_index > 0) {
-            int victim_value = piece_values[victim_index%6];
-            int attacker_value = piece_values[moves[i].piece_index%6];
-            score = victim_value*10 - attacker_value;
-        }
-        
+
         // check for best move
         if (moves[i].piece_index == best_move.piece_index &&
             moves[i].from_position == best_move.from_position &&
             moves[i].to_position == best_move.to_position) {
-            score += INF;
+            score += 10000;
+            num_non_quiet++;
+        }
+        // check for killer move
+        else if (killer_moves[current_depth][0].from_position == moves[i].from_position &&
+            killer_moves[current_depth][0].to_position == moves[i].to_position) {
+            score += 9500;
+            num_non_quiet++;
+        }
+        else if (killer_moves[current_depth][1].from_position == moves[i].from_position &&
+            killer_moves[current_depth][1].to_position == moves[i].to_position) {
+            score += 9500;
+            num_non_quiet++;
+        }
+        // check for capture
+        else if (victim_index > 0) {
+            int victim_value = piece_values[victim_index%6];
+            int attacker_value = piece_values[moves[i].piece_index%6];
+            score = victim_value*10 - attacker_value;
+            num_non_quiet++;
+        }
+        
+        // quiet moves
+        else {
+            score = history_moves[moves[i].from_position][moves[i].to_position];
         }
 
         scores[i] = score;
@@ -208,7 +228,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
             // apply negamax
-            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length);
+            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
             legal_moves++;
 
             if (score > max_score) {
@@ -225,9 +245,21 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
                 alpha = score;
             }
             if (alpha >= beta) {
-
+                // beta cutoff
                 // Undo the move
                 undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square);
+                
+                // store the killer move
+                if (killer_moves[current_depth][0].from_position != moves[move_index].from_position ) {
+                    killer_moves[current_depth][1] = killer_moves[current_depth][0];
+                    killer_moves[current_depth][0] = moves[move_index];
+                }
+
+                // update history heuristic score
+                if (i > num_non_quiet) {
+                    history_moves[moves[move_index].from_position][moves[move_index].to_position] += depth * depth;
+                }
+
                 break;
             }
         }
@@ -271,10 +303,12 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<move, 256>, 256>& moves_stack, 
     std::array<move_undo, 256>& undo_stack, 
     std::vector<transposition_table_entry>& transposition_table,
-    std::array<int, 64> piece_on_square) {
+    std::array<int, 64> piece_on_square,
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves, 
+    std::array<std::array<int, 64>, 64>& history_moves) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    int time_limit_ms = 1000;
+    int time_limit_ms = 10000;
 
     std::array<move, 256>& moves = moves_stack[0];
     int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
@@ -345,7 +379,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
             if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
                 
                 // apply negamax
-                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count);
+                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count, killer_moves, history_moves);
 
                 if (score > max_score) {
                     max_score = score;

@@ -47,7 +47,9 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<move_undo, 256>& undo_stack,
     std::vector<transposition_table_entry>& transposition_table,
     std::array<int, 64>& piece_on_square,
-    std::array<move, MAX_DEPTH>& pv, int& pv_length);
+    std::array<move, MAX_DEPTH>& pv, int& pv_length,
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
+    std::array<std::array<int, 64>, 64>& history_moves);
 
 move iterative_deepening(game_state& state, int max_depth, bool color,
     lookup_tables_wrap& lookup_tables, U64& occupancy_bitboard,
@@ -55,4 +57,6 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<move, 256>, 256>& moves_stack, 
     std::array<move_undo, 256>& undo_stack, 
     std::vector<transposition_table_entry>& transposition_table,
-    std::array<int, 64> piece_on_square);
+    std::array<int, 64> piece_on_square,
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
+    std::array<std::array<int, 64>, 64>& history_moves);
