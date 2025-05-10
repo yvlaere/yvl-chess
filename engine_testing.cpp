@@ -21,6 +21,16 @@ constexpr int king_value = 20000;
 
 constexpr std::array<int, 6> piece_values = {pawn_value, knight_value, bishop_value, rook_value, queen_value, king_value};
 
+// transposition tables
+
+struct transposition_table_entry {
+    U64 hash;
+    uint8_t depth;
+    int score;
+    uint8_t flag; // 0: exact, 1: alpha, 2: beta
+    move best_move;
+};
+
 std::string index_to_chess(int index) {
     if (index < 0 || index >= 64) {
         return ""; // or handle the error as appropriate
@@ -86,7 +96,6 @@ void visualize_game_state(const game_state& state) {
 }
 
 // evaluation
-
 int evaluation(game_state &state) {
     // basic evaluation with piece square tables, based on the simplified evaluation function on chessprogramming.org
 
@@ -120,7 +129,7 @@ int evaluation(game_state &state) {
         U64 bb_black = state.piece_bitboards[piece_index + 6];
         while (bb_black) {
             int square = __builtin_ctzll(bb_black);
-            black_score += piece_values[piece_index + 6];
+            black_score += piece_values[piece_index];
             black_score += piece_square_tables[piece_index][63 - square];
             bb_black &= bb_black - 1;
         }
@@ -131,8 +140,6 @@ int evaluation(game_state &state) {
     U64 bb_black_king = state.piece_bitboards[11];
     int white_king_square = __builtin_ctzll(bb_white_king);
     int black_king_square = __builtin_ctzll(bb_black_king);
-    white_score += piece_values[5];
-    black_score += piece_values[11];
 
     if (white_score + black_score < 1400) {
         // endgame evaluation
@@ -145,19 +152,12 @@ int evaluation(game_state &state) {
         black_score += piece_square_tables[5][63 - black_king_square];
     }
 
+    white_score += piece_values[5];
+    black_score += piece_values[5];
+
     int score = white_score - black_score;
     return score;
 }
-
-// transposition tables
-
-struct transposition_table_entry {
-    U64 hash;
-    uint8_t depth;
-    int score;
-    uint8_t flag; // 0: exact, 1: alpha, 2: beta
-    move best_move;
-};
 
 // search algorithm
 
@@ -265,12 +265,13 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     }
 
     // null move pruning (needs to be before move generation)
-    if (depth >= 3 && pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard)) {
+    bool in_check = pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard);
+    if (depth >= 3 && in_check) {
         // null move
         U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
         int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
         if (score >= beta) {
-            //return score;
+            return score;
         }
     }
     
@@ -291,6 +292,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     int legal_moves = 0;
     int original_alpha = alpha;
     int original_beta = beta;
+    bool LMR = false;
 
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
@@ -303,10 +305,14 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
-            
             // apply negamax
-            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
+            int score = -negamax(state, depth - 1 - LMR, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
             legal_moves++;
+
+            // late move reductions
+            if (!LMR && !in_check && legal_moves > 2 && depth > 3) {
+                LMR = true;
+            }
 
             if (score > max_score) {
                 max_score = score;
@@ -428,7 +434,6 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
                 moves[i].piece_index == best_PV_moves[0].piece_index &&
                 moves[i].from_position == best_PV_moves[0].from_position &&
                 moves[i].to_position == best_PV_moves[0].to_position) {
-                //std::cout << "best move" << std::endl;
                 score += INF;
             }
 
@@ -445,9 +450,6 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
         
         // apply negamax
         int max_score = -INF;
-        //int best_move_index = -1;
-
-        std::cout << "first move: " << index_to_chess(moves[move_order[0]].to_position) << " Piece index: " << moves[move_order[0]].piece_index << std::endl;
 
         // iterate over all pseudo-legal moves
         for (int i = 0; i < move_count; i++) {
@@ -472,7 +474,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
                         best_PV_moves[j + 1] = root_PV_moves[j];
                     }
 
-                    std::cout << "Best temp move: " << index_to_chess(moves[move_index].to_position) << " Piece index: " << moves[move_index].piece_index<< std::endl;
+                    std::cout << "Best temp move: " << index_to_chess(moves[move_index].to_position) << " Score: " << max_score << std::endl;
                 }
             }
 
@@ -487,7 +489,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
         // print temporary best move
         std::cout << "Best move: " << index_to_chess(best_PV_moves[0].to_position) << std::endl;
         std::cout << "Best score: " << max_score << std::endl;
-        std::cout << "Best move: piece index: " << best_PV_moves[0].piece_index << " from: " << best_PV_moves[0].from_position << " to: " << best_PV_moves[0].to_position << std::endl;
+        std::cout << "Best move: piece index: " << static_cast<int>(best_PV_moves[0].piece_index) << " from: " << best_PV_moves[0].from_position << " to: " << best_PV_moves[0].to_position << std::endl;
         
     }
     
@@ -562,7 +564,7 @@ int main() {
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 9;
+    int negamax_depth = 8;
     bool color = false;
 
     // killer_moves

@@ -98,7 +98,7 @@ int evaluation(game_state &state) {
         U64 bb_black = state.piece_bitboards[piece_index + 6];
         while (bb_black) {
             int square = __builtin_ctzll(bb_black);
-            black_score += piece_values[piece_index + 6];
+            black_score += piece_values[piece_index];
             black_score += piece_square_tables[piece_index][63 - square];
             bb_black &= bb_black - 1;
         }
@@ -109,8 +109,6 @@ int evaluation(game_state &state) {
     U64 bb_black_king = state.piece_bitboards[11];
     int white_king_square = __builtin_ctzll(bb_white_king);
     int black_king_square = __builtin_ctzll(bb_black_king);
-    white_score += piece_values[5];
-    black_score += piece_values[11];
 
     if (white_score + black_score < 1400) {
         // endgame evaluation
@@ -122,6 +120,9 @@ int evaluation(game_state &state) {
         white_score += piece_square_tables[5][white_king_square];
         black_score += piece_square_tables[5][63 - black_king_square];
     }
+
+    white_score += piece_values[5];
+    black_score += piece_values[5];
 
     int score = white_score - black_score;
     return score;
@@ -231,6 +232,17 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
         }
         best_move = entry.best_move;
     }
+
+    // null move pruning (needs to be before move generation)
+    bool in_check = pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard);
+    if (depth >= 3 && in_check) {
+        // null move
+        U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
+        int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
+        if (score >= beta) {
+            return score;
+        }
+    }
     
     // generate moves from the current position.
     // generate pseudo-legal moves
@@ -249,6 +261,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     int legal_moves = 0;
     int original_alpha = alpha;
     int original_beta = beta;
+    bool LMR = false;
 
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
@@ -262,8 +275,13 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
             // apply negamax
-            int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
+            int score = -negamax(state, depth - 1 - LMR, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
             legal_moves++;
+
+            // late move reductions
+            if (!LMR && !in_check && legal_moves > 2 && depth > 3) {
+                LMR = true;
+            }
 
             if (score > max_score) {
                 max_score = score;
