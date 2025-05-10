@@ -102,29 +102,50 @@ int evaluation(game_state &state) {
 
     std::array<int, 64> endgame_king_square_table = {-50, -30, -30, -30, -30, -30, -30, -50, -30, -30, 0, 0, 0, 0, -30, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -20, -10, 0, 0, -10, -20, -30, -50, -40, -30, -20, -20, -30, -40, -50};
     
-    int score = 0;
+    int white_score = 0;
+    int black_score = 0;
 
-    for (int piece_index = 0; piece_index < 12; ++piece_index) {
-        U64 bb = state.piece_bitboards[piece_index];
-        while (bb) {
-            int square = __builtin_ctzll(bb);
+    // iterate over all pieces, except king
+    for (int piece_index = 0; piece_index < 5; ++piece_index) {
+        U64 bb_white = state.piece_bitboards[piece_index];
+        while (bb_white) {
+            int square = __builtin_ctzll(bb_white);
             
-            // black pieces
-            if (piece_index >= 6) {
-                score -= piece_values[piece_index - 6];
-                score -= piece_square_tables[piece_index - 6][63 - square];
-            }
+            white_score += piece_values[piece_index];
+            white_score += piece_square_tables[piece_index][square];
+            
+            bb_white &= bb_white - 1;
+        }
 
-            // white pieces
-            else {
-                score += piece_values[piece_index];
-                score += piece_square_tables[piece_index][square];
-            }
-            
-            bb &= bb - 1;
+        U64 bb_black = state.piece_bitboards[piece_index + 6];
+        while (bb_black) {
+            int square = __builtin_ctzll(bb_black);
+            black_score += piece_values[piece_index + 6];
+            black_score += piece_square_tables[piece_index][63 - square];
+            bb_black &= bb_black - 1;
         }
     }
 
+    // king evaluation
+    U64 bb_white_king = state.piece_bitboards[5];
+    U64 bb_black_king = state.piece_bitboards[11];
+    int white_king_square = __builtin_ctzll(bb_white_king);
+    int black_king_square = __builtin_ctzll(bb_black_king);
+    white_score += piece_values[5];
+    black_score += piece_values[11];
+
+    if (white_score + black_score < 1400) {
+        // endgame evaluation
+        white_score += endgame_king_square_table[white_king_square];
+        black_score += endgame_king_square_table[63 - black_king_square];
+    }
+    else {
+        // middle game evaluation
+        white_score += piece_square_tables[5][white_king_square];
+        black_score += piece_square_tables[5][63 - black_king_square];
+    }
+
+    int score = white_score - black_score;
     return score;
 }
 
@@ -140,61 +161,13 @@ struct transposition_table_entry {
 
 // search algorithm
 
-// fast negamax search with alpha-beta pruning.
-// 'depth' is the remaining search depth, and alpha-beta parameters prune branches.
-int negamax(game_state &state, int depth, int alpha, int beta, bool color, 
-    lookup_tables_wrap& lookup_tables,
-    const U64& occupancy_bitboard, int current_depth,
-    zobrist_randoms& zobrist, U64& zobrist_hash,
-    std::array<std::array<move, 256>, 256>& moves_stack, 
-    std::array<move_undo, 256>& undo_stack,
-    std::vector<transposition_table_entry>& transposition_table,
-    std::array<int, 64>& piece_on_square,
-    std::array<move, MAX_DEPTH>& pv, int& pv_length, 
+// move ordering
+void order_moves(std::array<int, 256>& move_order, 
+    std::array<int, 256>& scores, std::array<move, 256>& moves, int& move_count,
+    std::array<int, 64>& piece_on_square, int& num_non_quiet,
+    move& best_move, int& current_depth,
     std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
     std::array<std::array<int, 64>, 64>& history_moves) {
-
-    if (depth == 0) {
-        pv_length = 0;
-        int eval = evaluation(state);
-        return color ? -eval : eval;
-    }
-
-    std::array<move, MAX_DEPTH> child_pv;
-    int child_pv_length = 0;
-
-    // check transposition table for pruning
-    U64 TT_index = zobrist_hash & (TT_SIZE - 1);
-    transposition_table_entry& entry = transposition_table[TT_index];
-    move best_move;
-    if (entry.hash == zobrist_hash && entry.depth >= depth) {
-        if (entry.flag == 0) {
-            pv[0] = entry.best_move;
-            pv_length = 1;
-            return entry.score;
-        }
-        else if (entry.flag == 1) {
-            alpha = std::max(alpha, entry.score);
-        }
-        else if (entry.flag == 2) {
-            beta = std::min(beta, entry.score);
-        }
-        if (alpha >= beta) {
-            pv[0] = entry.best_move;
-            pv_length = 1;
-            return entry.score;
-        }
-        best_move = entry.best_move;
-    }
-    
-    // generate moves from the current position.
-    // generate pseudo-legal moves
-    std::array<move, 256>& moves = moves_stack[current_depth];
-    int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
-
-    std::array<int, 256> move_order;
-    std::array<int, 256> scores;
-    int num_non_quiet = 0;
 
     // iterate over all pseudo-legal moves
     for (int i = 0; i < move_count; i++) {
@@ -242,6 +215,76 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
         return scores[a] > scores[b];
     });
+}
+
+// fast negamax search with alpha-beta pruning.
+// 'depth' is the remaining search depth, and alpha-beta parameters prune branches.
+int negamax(game_state &state, int depth, int alpha, int beta, bool color, 
+    lookup_tables_wrap& lookup_tables,
+    const U64& occupancy_bitboard, int current_depth,
+    zobrist_randoms& zobrist, U64& zobrist_hash,
+    std::array<std::array<move, 256>, 256>& moves_stack, 
+    std::array<move_undo, 256>& undo_stack,
+    std::vector<transposition_table_entry>& transposition_table,
+    std::array<int, 64>& piece_on_square,
+    std::array<move, MAX_DEPTH>& pv, int& pv_length, 
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
+    std::array<std::array<int, 64>, 64>& history_moves) {
+
+    if (depth == 0) {
+        pv_length = 0;
+        int eval = evaluation(state);
+        return color ? -eval : eval;
+    }
+
+    std::array<move, MAX_DEPTH> child_pv;
+    int child_pv_length = 0;
+
+    // check transposition table for pruning
+    U64 TT_index = zobrist_hash & (TT_SIZE - 1);
+    transposition_table_entry& entry = transposition_table[TT_index];
+    move best_move;
+    if (entry.hash == zobrist_hash && entry.depth >= depth) {
+        if (entry.flag == 0) {
+            pv[0] = entry.best_move;
+            pv_length = 1;
+            return entry.score;
+        }
+        else if (entry.flag == 1) {
+            alpha = std::max(alpha, entry.score);
+        }
+        else if (entry.flag == 2) {
+            beta = std::min(beta, entry.score);
+        }
+        if (alpha >= beta) {
+            pv[0] = entry.best_move;
+            pv_length = 1;
+            return entry.score;
+        }
+        best_move = entry.best_move;
+    }
+
+    // null move pruning (needs to be before move generation)
+    if (depth >= 3 && state.piece_bitboards[0] == 0) {
+        // null move
+        U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
+        int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
+        if (score >= beta) {
+            return score;
+        }
+    }
+    
+    // generate moves from the current position.
+    // generate pseudo-legal moves
+    std::array<move, 256>& moves = moves_stack[current_depth];
+    int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
+
+    std::array<int, 256> move_order;
+    std::array<int, 256> scores;
+    int num_non_quiet = 0;
+
+    // order moves
+    order_moves(move_order, scores, moves, move_count, piece_on_square, num_non_quiet, best_move, current_depth, killer_moves, history_moves);
 
     int max_score = -INF;
     int best_move_index = -1;
@@ -260,6 +303,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
+            
             // apply negamax
             int score = -negamax(state, depth - 1, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
             legal_moves++;
@@ -341,7 +385,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<int, 64>, 64>& history_moves) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    int time_limit_ms = 1000000;
+    int time_limit_ms = 200000000;
 
     std::array<move, 256>& moves = moves_stack[0];
     int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);

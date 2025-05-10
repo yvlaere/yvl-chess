@@ -80,33 +80,110 @@ int evaluation(game_state &state) {
 
     std::array<int, 64> endgame_king_square_table = {-50, -30, -30, -30, -30, -30, -30, -50, -30, -30, 0, 0, 0, 0, -30, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -20, -10, 0, 0, -10, -20, -30, -50, -40, -30, -20, -20, -30, -40, -50};
     
-    int score = 0;
+    int white_score = 0;
+    int black_score = 0;
 
-    for (int piece_index = 0; piece_index < 12; ++piece_index) {
-        U64 bb = state.piece_bitboards[piece_index];
-        while (bb) {
-            int square = __builtin_ctzll(bb);
+    // iterate over all pieces, except king
+    for (int piece_index = 0; piece_index < 5; ++piece_index) {
+        U64 bb_white = state.piece_bitboards[piece_index];
+        while (bb_white) {
+            int square = __builtin_ctzll(bb_white);
             
-            // black pieces
-            if (piece_index >= 6) {
-                score -= piece_values[piece_index - 6];
-                score -= piece_square_tables[piece_index - 6][63 - square];
-            }
+            white_score += piece_values[piece_index];
+            white_score += piece_square_tables[piece_index][square];
+            
+            bb_white &= bb_white - 1;
+        }
 
-            // white pieces
-            else {
-                score += piece_values[piece_index];
-                score += piece_square_tables[piece_index][square];
-            }
-            
-            bb &= bb - 1;
+        U64 bb_black = state.piece_bitboards[piece_index + 6];
+        while (bb_black) {
+            int square = __builtin_ctzll(bb_black);
+            black_score += piece_values[piece_index + 6];
+            black_score += piece_square_tables[piece_index][63 - square];
+            bb_black &= bb_black - 1;
         }
     }
 
+    // king evaluation
+    U64 bb_white_king = state.piece_bitboards[5];
+    U64 bb_black_king = state.piece_bitboards[11];
+    int white_king_square = __builtin_ctzll(bb_white_king);
+    int black_king_square = __builtin_ctzll(bb_black_king);
+    white_score += piece_values[5];
+    black_score += piece_values[11];
+
+    if (white_score + black_score < 1400) {
+        // endgame evaluation
+        white_score += endgame_king_square_table[white_king_square];
+        black_score += endgame_king_square_table[63 - black_king_square];
+    }
+    else {
+        // middle game evaluation
+        white_score += piece_square_tables[5][white_king_square];
+        black_score += piece_square_tables[5][63 - black_king_square];
+    }
+
+    int score = white_score - black_score;
     return score;
 }
 
 // search algorithm
+
+// move ordering
+void order_moves(std::array<int, 256>& move_order, 
+    std::array<int, 256>& scores, std::array<move, 256>& moves, int& move_count,
+    std::array<int, 64>& piece_on_square, int& num_non_quiet,
+    move& best_move, int& current_depth,
+    std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
+    std::array<std::array<int, 64>, 64>& history_moves) {
+
+    // iterate over all pseudo-legal moves
+    for (int i = 0; i < move_count; i++) {
+
+        int score = 0;
+        int victim_index = piece_on_square[moves[i].to_position];
+
+        // check for best move
+        if (moves[i].piece_index == best_move.piece_index &&
+            moves[i].from_position == best_move.from_position &&
+            moves[i].to_position == best_move.to_position) {
+            //std::cout << "best move" << std::endl;
+            score += 10000;
+            num_non_quiet++;
+        }
+        // check for killer move
+        else if (killer_moves[current_depth][0].from_position == moves[i].from_position &&
+            killer_moves[current_depth][0].to_position == moves[i].to_position) {
+            score += 9500;
+            num_non_quiet++;
+        }
+        else if (killer_moves[current_depth][1].from_position == moves[i].from_position &&
+            killer_moves[current_depth][1].to_position == moves[i].to_position) {
+            score += 9500;
+            num_non_quiet++;
+        }
+        // check for capture
+        else if (victim_index > 0) {
+            int victim_value = piece_values[victim_index%6];
+            int attacker_value = piece_values[moves[i].piece_index%6];
+            score = victim_value*10 - attacker_value;
+            num_non_quiet++;
+        }
+        
+        // quiet moves
+        else {
+            score = history_moves[moves[i].from_position][moves[i].to_position];
+        }
+
+        scores[i] = score;
+        move_order[i] = i; // store the index
+    }
+
+    // sort moves based on scores
+    std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
+        return scores[a] > scores[b];
+    });
+}
 
 // fast negamax search with alpha-beta pruning.
 // 'depth' is the remaining search depth, and alpha-beta parameters prune branches.
@@ -164,51 +241,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<int, 256> scores;
     int num_non_quiet = 0;
 
-    // iterate over all pseudo-legal moves
-    for (int i = 0; i < move_count; i++) {
-
-        int score = 0;
-        int victim_index = piece_on_square[moves[i].to_position];
-
-        // check for best move
-        if (moves[i].piece_index == best_move.piece_index &&
-            moves[i].from_position == best_move.from_position &&
-            moves[i].to_position == best_move.to_position) {
-            score += 10000;
-            num_non_quiet++;
-        }
-        // check for killer move
-        else if (killer_moves[current_depth][0].from_position == moves[i].from_position &&
-            killer_moves[current_depth][0].to_position == moves[i].to_position) {
-            score += 9500;
-            num_non_quiet++;
-        }
-        else if (killer_moves[current_depth][1].from_position == moves[i].from_position &&
-            killer_moves[current_depth][1].to_position == moves[i].to_position) {
-            score += 9500;
-            num_non_quiet++;
-        }
-        // check for capture
-        else if (victim_index > 0) {
-            int victim_value = piece_values[victim_index%6];
-            int attacker_value = piece_values[moves[i].piece_index%6];
-            score = victim_value*10 - attacker_value;
-            num_non_quiet++;
-        }
-        
-        // quiet moves
-        else {
-            score = history_moves[moves[i].from_position][moves[i].to_position];
-        }
-
-        scores[i] = score;
-        move_order[i] = i; // store the index
-    }
-
-    // sort moves based on scores
-    std::sort(move_order.begin(), move_order.begin() + move_count, [&](int a, int b) {
-        return scores[a] > scores[b];
-    });
+    // order moves
+    order_moves(move_order, scores, moves, move_count, piece_on_square, num_non_quiet, best_move, current_depth, killer_moves, history_moves);
 
     int max_score = -INF;
     int best_move_index = -1;
@@ -308,7 +342,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<int, 64>, 64>& history_moves) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    int time_limit_ms = 10000;
+    int time_limit_ms = 1000;
 
     std::array<move, 256>& moves = moves_stack[0];
     int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);

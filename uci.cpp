@@ -161,7 +161,7 @@ int main() {
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 7;
+    int negamax_depth = 9;
     bool color = false;
 
     // UCI loop
