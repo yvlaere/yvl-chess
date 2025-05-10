@@ -265,12 +265,12 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     }
 
     // null move pruning (needs to be before move generation)
-    if (depth >= 3 && state.piece_bitboards[0] == 0) {
+    if (depth >= 3 && pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard)) {
         // null move
         U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
         int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves);
         if (score >= beta) {
-            return score;
+            //return score;
         }
     }
     
@@ -562,7 +562,7 @@ int main() {
     std::array<int, 64> piece_on_square;
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-    int negamax_depth = 8;
+    int negamax_depth = 9;
     bool color = false;
 
     // killer_moves
