@@ -49,7 +49,12 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<int, 64>& piece_on_square,
     std::array<move, MAX_DEPTH>& pv, int& pv_length,
     std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
-    std::array<std::array<int, 64>, 64>& history_moves);
+    std::array<std::array<int, 64>, 64>& history_moves,
+    NNUE_accumulator& accumulator,
+    const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
+    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
+    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4);
 
 move iterative_deepening(game_state& state, int max_depth, bool color,
     lookup_tables_wrap& lookup_tables, U64& occupancy_bitboard,
@@ -59,4 +64,9 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::vector<transposition_table_entry>& transposition_table,
     std::array<int, 64> piece_on_square,
     std::array<std::array<move, 2>, MAX_DEPTH>& killer_moves,
-    std::array<std::array<int, 64>, 64>& history_moves);
+    std::array<std::array<int, 64>, 64>& history_moves, 
+    NNUE_accumulator& accumulator,
+    const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
+    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
+    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4);

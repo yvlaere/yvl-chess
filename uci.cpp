@@ -129,6 +129,48 @@ int main() {
     std::array<U64, 2> en_passant_bitboards = {w_en_passant, b_en_passant};
     game_state initial_game_state(piece_bitboards, en_passant_bitboards, w_long_castle, w_short_castle, b_long_castle, b_short_castle);
 
+    // create neural network layers
+    // random linear layer weights and biases
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
+    linear_layer<INPUT_SIZE, HIDDEN1_SIZE> layer1;
+    for (int i = 0; i < INPUT_SIZE; i++) {
+        for (int j = 0; j < HIDDEN1_SIZE; j++) {
+            layer1.weights[i][j] = dis(gen);
+        }
+    }
+    for (int i = 0; i < HIDDEN1_SIZE; i++) {
+        layer1.biases[i] = dis(gen);
+    }
+    linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE> layer2;
+    for (int i = 0; i < HIDDEN1_SIZE; i++) {
+        for (int j = 0; j < HIDDEN2_SIZE; j++) {
+            layer2.weights[i][j] = dis(gen);
+        }
+    }
+    for (int i = 0; i < HIDDEN2_SIZE; i++) {
+        layer2.biases[i] = dis(gen);
+    }
+    linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE> layer3;
+    for (int i = 0; i < HIDDEN2_SIZE; i++) {
+        for (int j = 0; j < HIDDEN3_SIZE; j++) {
+            layer3.weights[i][j] = dis(gen);
+        }
+    }
+    for (int i = 0; i < HIDDEN3_SIZE; i++) {
+        layer3.biases[i] = dis(gen);
+    }
+    linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE> layer4;
+    for (int i = 0; i < HIDDEN3_SIZE; i++) {
+        for (int j = 0; j < OUTPUT_SIZE; j++) {
+            layer4.weights[i][j] = dis(gen);
+        }
+    }
+    for (int i = 0; i < OUTPUT_SIZE; i++) {
+        layer4.biases[i] = dis(gen);
+    }
+    
     // create lookup tables
     lookup_tables_wrap lookup_tables;
     generate_lookup_tables(lookup_tables);
@@ -163,6 +205,12 @@ int main() {
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
     int negamax_depth = 9;
     bool color = false;
+
+    // NNUE accumulator
+    NNUE_accumulator accumulator;
+    std::vector<int> active_features;
+    game_state_to_input(piece_on_square, active_features);
+    refresh_accumulator(layer1, accumulator, active_features, color);
 
     // UCI loop
     while (true) {
@@ -241,7 +289,7 @@ int main() {
                             if (move_string == sub_commands[j]) {
                                 // apply move
                                 move_undo undo;
-                                apply_move(state, moves[k], zobrist_hash, zobrist, undo, piece_on_square);
+                                apply_move(state, moves[k], zobrist_hash, zobrist, undo, piece_on_square, layer1, accumulator);
                                 color = !color;
                                 break;
                             }
@@ -256,7 +304,7 @@ int main() {
             int max_depth = 6;
 
             U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves);
+            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }
