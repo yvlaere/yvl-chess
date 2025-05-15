@@ -370,7 +370,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    int time_limit_ms = 1000;
+    int time_limit_ms = 1000000;
 
     std::array<move, 256>& moves = moves_stack[0];
     int move_count = pseudo_legal_move_generator(moves, state, color, lookup_tables, occupancy_bitboard);
@@ -456,6 +456,8 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
             // Undo the move
             undo_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square, layer1, accumulator);
         }
+
+        std::cout << "Depth: " << negamax_depth << ", Score: " << max_score << std::endl;
     }
 
     // update state

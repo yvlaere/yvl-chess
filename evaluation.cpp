@@ -5,8 +5,8 @@ void game_state_to_input(const std::array<int, 64>& piece_on_square, std::vector
 
     // iterate over all pieces
     for (int i = 0; i < 64; i++) {
-        if (piece_on_square[i] != 0) {
-            active_features.push_back(piece_on_square[i] + i*64);
+        if (piece_on_square[i] != -1) {
+            active_features.push_back(piece_on_square[i]*64 + i);
         }
     }
 }

@@ -130,47 +130,15 @@ int main() {
     game_state initial_game_state(piece_bitboards, en_passant_bitboards, w_long_castle, w_short_castle, b_long_castle, b_short_castle);
 
     // create neural network layers
-    // random linear layer weights and biases
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
     linear_layer<INPUT_SIZE, HIDDEN1_SIZE> layer1;
-    for (int i = 0; i < INPUT_SIZE; i++) {
-        for (int j = 0; j < HIDDEN1_SIZE; j++) {
-            layer1.weights[i][j] = dis(gen);
-        }
-    }
-    for (int i = 0; i < HIDDEN1_SIZE; i++) {
-        layer1.biases[i] = dis(gen);
-    }
     linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE> layer2;
-    for (int i = 0; i < HIDDEN1_SIZE; i++) {
-        for (int j = 0; j < HIDDEN2_SIZE; j++) {
-            layer2.weights[i][j] = dis(gen);
-        }
-    }
-    for (int i = 0; i < HIDDEN2_SIZE; i++) {
-        layer2.biases[i] = dis(gen);
-    }
     linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE> layer3;
-    for (int i = 0; i < HIDDEN2_SIZE; i++) {
-        for (int j = 0; j < HIDDEN3_SIZE; j++) {
-            layer3.weights[i][j] = dis(gen);
-        }
-    }
-    for (int i = 0; i < HIDDEN3_SIZE; i++) {
-        layer3.biases[i] = dis(gen);
-    }
     linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE> layer4;
-    for (int i = 0; i < HIDDEN3_SIZE; i++) {
-        for (int j = 0; j < OUTPUT_SIZE; j++) {
-            layer4.weights[i][j] = dis(gen);
-        }
-    }
-    for (int i = 0; i < OUTPUT_SIZE; i++) {
-        layer4.biases[i] = dis(gen);
-    }
-    
+    load_layer(layer1, "NNUE_training/model/layer1_weights.txt", "NNUE_training/model/layer1_biases.txt");
+    load_layer(layer2, "NNUE_training/model/layer2_weights.txt", "NNUE_training/model/layer2_biases.txt");
+    load_layer(layer3, "NNUE_training/model/layer3_weights.txt", "NNUE_training/model/layer3_biases.txt");
+    load_layer(layer4, "NNUE_training/model/layer4_weights.txt", "NNUE_training/model/layer4_biases.txt");
+
     // create lookup tables
     lookup_tables_wrap lookup_tables;
     generate_lookup_tables(lookup_tables);
@@ -201,6 +169,7 @@ int main() {
     // initialize
     game_state state = initial_game_state;
     std::array<int, 64> piece_on_square;
+    piece_on_square.fill(-1);
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
     U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
     int negamax_depth = 9;

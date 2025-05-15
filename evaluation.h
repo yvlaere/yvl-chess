@@ -3,6 +3,7 @@
 #include <random>
 #include <algorithm>
 #include <vector>
+#include <fstream>
 
 // start with a very basic NNUE implementation
 // this is a simple feedforward neural network with 4 layers
@@ -36,6 +37,22 @@ struct linear_layer {
     std::array<std::array<float, output_size>, input_size> weights;
     std::array<float, output_size> biases;
 };
+
+// data loader for linear layers
+template <size_t input_size, size_t output_size>
+void load_layer(linear_layer<input_size, output_size>& layer, const std::string& weights_file, const std::string& biases_file) {
+    std::ifstream w_file(weights_file), b_file(biases_file);
+
+    for (size_t i = 0; i < input_size; i++) {
+        for (size_t j = 0; j < output_size; ++j) {
+            w_file >> layer.weights[i][j];
+        }
+    }
+
+    for (size_t j = 0; j < output_size; j++) {
+        b_file >> layer.biases[j];
+    }
+}
 
 // input functions
 void game_state_to_input(const std::array<int, 64>& piece_on_square, std::vector<int>& active_features);
