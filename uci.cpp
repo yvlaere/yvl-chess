@@ -270,10 +270,8 @@ int main() {
         else if (sub_commands[0] == "go") {
             // start the search
 
-            int max_depth = 6;
-
             U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-            move best_move = iterative_deepening(state, max_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
+            move best_move = iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }

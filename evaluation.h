@@ -43,14 +43,15 @@ template <size_t input_size, size_t output_size>
 void load_layer(linear_layer<input_size, output_size>& layer, const std::string& weights_file, const std::string& biases_file) {
     std::ifstream w_file(weights_file), b_file(biases_file);
 
-    for (size_t i = 0; i < input_size; i++) {
-        for (size_t j = 0; j < output_size; ++j) {
-            w_file >> layer.weights[i][j];
+    // !! FIRST ITERATE OVER OUTPUT SIZE !!
+    for (int i = 0; i < output_size; i++) {
+        for (int j = 0; j < input_size; j++) {
+            w_file >> layer.weights[j][i];
         }
     }
 
-    for (size_t j = 0; j < output_size; j++) {
-        b_file >> layer.biases[j];
+    for (int i = 0; i < output_size; i++) {
+        b_file >> layer.biases[i];
     }
 }
 
@@ -71,7 +72,7 @@ float* linear_layer_forward(const linear_layer<input_size, output_size>& layer, 
     // multiply input by weights and add to output
     for (int i = 0; i < input_size; i++) {
         for (int j = 0; j < output_size; j++) {
-            output[i] += layer.weights[i][j] * input[i];
+            output[j] += layer.weights[i][j] * input[i];
         }
     }
 

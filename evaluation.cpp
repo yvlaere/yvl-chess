@@ -16,7 +16,7 @@ void refresh_accumulator(const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1, N
     
     // add the biases to the accumulator
     for (int i = 0; i < HIDDEN1_SIZE; i++) {
-        accumulator.values[i] += layer1.biases[i];
+        accumulator.values[i] = layer1.biases[i];
     }
 
     // add the weights of active features to the accumulator
@@ -76,22 +76,24 @@ float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_
     next_output = linear_layer_forward(layer2, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
+    
     // cReLu after layer 2
     next_output = cReLu(HIDDEN2_SIZE, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
+
     // linear layer 3
     next_output = linear_layer_forward(layer3, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
+
     // cReLu after layer 3
     next_output = cReLu(HIDDEN3_SIZE, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
+
     // linear layer 4
     next_output = linear_layer_forward(layer4, curr_output, curr_input);
-    curr_input = curr_output;
-    curr_output = next_output;
 
     return *curr_output;
 
