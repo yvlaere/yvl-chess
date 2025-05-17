@@ -207,7 +207,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
     if (depth == 0) {
         pv_length = 0;
-        int eval = nnue_evaluation(accumulator, layer2, layer3, layer4);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
+        int eval = evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
         return color ? -eval : eval;
     }
 
@@ -239,12 +239,13 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     }
 
     // null move pruning (needs to be before move generation)
-    bool in_check = pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard);
-    if (depth >= 3 && in_check) {
+    bool not_in_check = pseudo_to_legal(state, !color, lookup_tables, occupancy_bitboard);
+    if (depth >= 3 && not_in_check) {
         // null move
         U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
         int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
         if (score >= beta) {
+            //std::cout << "Null move pruning at depth " << depth << std::endl;
             return score;
         }
     }
@@ -284,8 +285,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
             legal_moves++;
 
             // late move reductions
-            if (!LMR && !in_check && legal_moves > 2 && depth > 3) {
-                LMR = true;
+            if (!LMR && not_in_check && legal_moves > 2 && depth > 3) {
+                //LMR = true;
             }
 
             if (score > max_score) {

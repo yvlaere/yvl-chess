@@ -1,4 +1,5 @@
 .vscode/
 .venv/
 deprecated/
+NNUE_training/model
 NNUE_training/training_data/*

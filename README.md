@@ -83,9 +83,12 @@ Transposition tables are hash tables that store exact scores, lower bound values
 A zobrist hash is an incrementally updatable hash of a game state. Each element of the game state (piece types, piece locations, castling rights, en passant squares, side to move) has a random value associated with it. As moves are made and unmade during the search, the zobrist hash is incrementally updated by adding or removing the relevant random values using the XOR operation.
 
 ### Move Ordering
-Move ordering makes alpha-beta pruning more efficient. The current move ordering approach puts the best transposition table move first, followed by captures sorted by MVV-LVA, followed by all remaining moves in random order.
+Move ordering makes alpha-beta pruning more efficient. The current move ordering approach puts the best transposition table move first, followed by captures sorted by MVV-LVA. The rest of the moves gets ordered using killer and history heuristics.
 
 MVV-LVA stands for most valuable victim, least valuable attacker. It is a way to order captures by prioritizing valuable victims and unvaluable attackers.
+
+### Null-Move Pruning
+Forward-pruning heuristic that makes a “pass” (null move, forfeiting a turn) and searches at depth-2. If that reduced search causes a beta-cutoff, the full branch is cut off.
 
 ### Evaluation Function
 During the search, positions need to be evaluated to obtain a score. Positions are evaluated by adding the values of all the pieces on the board together, modified by a position score in their piece-square tables.
@@ -96,16 +99,16 @@ During the search, positions need to be evaluated to obtain a score. Positions a
 - The `engine_testing.cpp` script can be used to test new features and contains a simple interface to play chess against the engine.
 
 ## Performance
-The chess engine was evaluated using cutechess-cli (https://github.com/cutechess/cutechess) in a gauntlet against multiple instances of stockfish (https://stockfishchess.org/), with their elo set at 1600, 1700, 1800 and 1900. Averaging out the elo values for each one of the opponents results in an elo of 1628.25
+The chess engine was evaluated using cutechess-cli (https://github.com/cutechess/cutechess) in a gauntlet against multiple instances of stockfish (https://stockfishchess.org/), with their elo set at 1600, 1700, 1800 and 1900. Averaging out the elo values for each one of the opponents results in an elo of 1683.25
 |Rank | Name | Elo |    +/-  | Games |  Score  |  Draw
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | yvl-bot | -57  |    76   |   80 |  41.9%  |  6.3%
-| 1 | SF1800  | 215  |   223   |   20 |  77.5%  |  5.0%
-| 2 | SF1900  |  168  |   193   |   20 |  72.5%  |  5.0%
-| 3 | SF1700  | -35  |   155   |   20 |  45.0%  | 10.0%
-| 4 | SF1600  |  -89  |   167   |   20 |  37.5%  | 5.0%
+| 0 | yvl-bot | -35  |    72   |   80 |  45.0%  | 12.5%
+| 1 | SF1900  | 168  |   193   |   20 |  72.5%  |  5.0%
+| 2 | SF1800  | 147  |   176   |   20 |  70.0%  | 10.0%
+| 3 | SF1700  | 53   |   151   |   20 |  57.5%  | 15.0%
+| 4 | SF1600  | -241 |   192   |   20 |  20.0%  | 20.0%
 
-The chess engine is available on lichess as yvl-bot.
+The chess engine is available on lichess as yvl-bot: https://lichess.org/@/yvl-bot
 
 ## License
 This project is licensed under the GPL-3.0 license (https://www.gnu.org/licenses/quick-guide-gplv3.html)
