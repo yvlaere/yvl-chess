@@ -207,7 +207,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
     if (depth == 0) {
         pv_length = 0;
-        int eval = evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
+        int eval = nnue_evaluation(accumulator, layer2, layer3, layer4);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
         return color ? -eval : eval;
     }
 
