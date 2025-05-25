@@ -1,0 +1,7 @@
+.vscode/
+.venv/
+deprecated/
+NNUE_training/model
+NNUE_training/runs
+NNUE_training/saved_models
+NNUE_training/training_data/*
