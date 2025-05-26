@@ -202,13 +202,16 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
     const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
-    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
-    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4) {
+    const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3) {
 
     if (depth == 0) {
         pv_length = 0;
-        int eval = nnue_evaluation(accumulator, layer2, layer3, layer4);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
-        return color ? -eval : eval;
+        int eval = nnue_evaluation(accumulator, layer2, layer3, color);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
+        //return color ? -eval : eval;
+
+        std::cout << "Evaluation at depth " << current_depth << ": " << eval << std::endl;
+
+        return eval;
     }
 
     std::array<move, MAX_DEPTH> child_pv;
@@ -243,7 +246,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     if (depth >= 3 && not_in_check) {
         // null move
         U64 null_zobrist_hash = zobrist_hash ^ zobrist.zobrist_black_to_move;
-        int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
+        int score = -negamax(state, depth - 3, -beta, -beta + 1, !color, lookup_tables, occupancy_bitboard, current_depth + 1, zobrist, null_zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves, accumulator, layer1, layer2, layer3);
         if (score >= beta) {
             //std::cout << "Null move pruning at depth " << depth << std::endl;
             return score;
@@ -281,7 +284,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
         // ensure move is legal (not putting king in check)
         if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
             // apply negamax
-            int score = -negamax(state, depth - 1 - LMR, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
+            int score = -negamax(state, depth - 1 - LMR, -beta, -alpha, !color, lookup_tables, new_occupancy, current_depth + 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, child_pv, child_pv_length, killer_moves, history_moves, accumulator, layer1, layer2, layer3);
             legal_moves++;
 
             // late move reductions
@@ -367,8 +370,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
     const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
-    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
-    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4) {
+    const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
     int time_limit_ms = 1000;
@@ -434,15 +436,32 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
             // get the move index from the sorted order
             int move_index = move_order[i];
 
+            std::cout << "Evaluating move: " << index_to_chess(moves[move_index].from_position) 
+                      << " to " << index_to_chess(moves[move_index].to_position) 
+                      << " with piece index: " << (int)moves[move_index].piece_index << std::endl;
+
             move_undo& undo = undo_stack[0];
             apply_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square, layer1, accumulator);
+            
+            /*
+            // print accumulator
+            for (int i = 0; i < HIDDEN1_SIZE; i++) {
+                std::cout << accumulator[0][i] << " ";
+            }
+            std::cout << std::endl;
+            for (int i = 0; i < HIDDEN1_SIZE; i++) {
+                std::cout << accumulator[1][i] << " ";
+            }
+            exit(0);
+            */
+            
             U64 new_occupancy = get_occupancy(state.piece_bitboards);
 
             // ensure move is legal (not putting king in check)
             if (pseudo_to_legal(state, !color, lookup_tables, new_occupancy)) {
                 
                 // apply negamax
-                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
+                int score = -negamax(state, negamax_depth, -INF, INF, !color, lookup_tables, new_occupancy, 1, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, root_PV_moves, root_PV_moves_count, killer_moves, history_moves, accumulator, layer1, layer2, layer3);
 
                 if (score > max_score) {
                     max_score = score;
