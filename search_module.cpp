@@ -201,15 +201,13 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<std::array<int, 64>, 64>& history_moves, 
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
-    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
     const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3) {
 
     if (depth == 0) {
         pv_length = 0;
         int eval = nnue_evaluation(accumulator, layer2, layer3, color);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
         //return color ? -eval : eval;
-
-        std::cout << "Evaluation at depth " << current_depth << ": " << eval << std::endl;
 
         return eval;
     }
@@ -369,7 +367,7 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<int, 64>, 64>& history_moves, 
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
-    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
     const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -435,10 +433,6 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
         for (int i = 0; i < move_count; i++) {
             // get the move index from the sorted order
             int move_index = move_order[i];
-
-            std::cout << "Evaluating move: " << index_to_chess(moves[move_index].from_position) 
-                      << " to " << index_to_chess(moves[move_index].to_position) 
-                      << " with piece index: " << (int)moves[move_index].piece_index << std::endl;
 
             move_undo& undo = undo_stack[0];
             apply_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square, layer1, accumulator);

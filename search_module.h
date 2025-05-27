@@ -52,7 +52,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     std::array<std::array<int, 64>, 64>& history_moves,
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
-    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
     const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3);
 
 move iterative_deepening(game_state& state, int max_depth, bool color,
@@ -66,5 +66,5 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     std::array<std::array<int, 64>, 64>& history_moves, 
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
-    const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2,
+    const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
     const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3);

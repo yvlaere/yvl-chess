@@ -60,12 +60,12 @@ float* cReLu(int size, float* output, const float* input) {
     return output + size;
 }
 
-float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color) {
+float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color) {
 
     // create a buffer that can fit the largest layer twice
     // so it needs to be max(HIDDEN1_SIZE, HIDDEN2_SIZE, OUTPUT_SIZE) × 2
     // this is faster than std::vector because it presents dynamic allocation overhead
-    float buffer[512];
+    float buffer[1024];
 
     std::array<float, 2*HIDDEN1_SIZE> input;
     bool stm = color;
@@ -73,14 +73,6 @@ float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_
         input[i] = accumulator[stm][i];
         input[HIDDEN1_SIZE + i] = accumulator[!stm][i];
     }
-
-    /*
-    // print accumulator
-    for (int i = 0; i < 2*HIDDEN1_SIZE; i++) {
-        std::cout << input[i] << " ";
-    }
-    exit(0);
-    */
 
     float* curr_output = buffer;
     float* curr_input = input.data();
@@ -91,39 +83,15 @@ float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_
     curr_input = curr_output;
     curr_output = next_output;
 
-    /*
-    for (int i = 0; i < 256; i++) {
-        std::cout << curr_output[i] << " ";
-    }
-    exit(0);
-    */
-
     // linear layer 2
     next_output = linear_layer_forward(layer2, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
 
-    /*
-    for (int i = 0; i < 32; i++) {
-        std::cout << input[i] << " ";
-    }
-    exit(0);
-    */
-    
     // cReLu after layer 2
     next_output = cReLu(HIDDEN2_SIZE, curr_output, curr_input);
     curr_input = curr_output;
     curr_output = next_output;
-
-    // linear layer 3
-    //next_output = linear_layer_forward(layer3, curr_output, curr_input);
-    //curr_input = curr_output;
-    //curr_output = next_output;
-
-    // cReLu after layer 3
-    //next_output = cReLu(HIDDEN3_SIZE, curr_output, curr_input);
-    //curr_input = curr_output;
-    //curr_output = next_output;
 
     // linear layer 4
     next_output = linear_layer_forward(layer3, curr_output, curr_input);

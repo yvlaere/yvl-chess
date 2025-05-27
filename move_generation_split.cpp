@@ -1200,8 +1200,8 @@ void undo_move(game_state& state, move& move_to_undo, U64& zobrist_hash, zobrist
     }
 
     // update accumulator
-    update_accumulator(layer1, accumulator, added_features_w, removed_features_w, false);
-    update_accumulator(layer1, accumulator, added_features_b, removed_features_b, true);
+    update_accumulator(layer1, accumulator, removed_features_w, added_features_w, false);
+    update_accumulator(layer1, accumulator, removed_features_b, added_features_b, true);
 }
 
 bool pseudo_to_legal(game_state& state, bool color, 

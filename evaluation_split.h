@@ -6,7 +6,7 @@
 #include <fstream>
 
 // start with a very basic NNUE implementation
-// this is a simple feedforward neural network with 4 layers
+// this is a simple feedforward neural network with 3 layers
 // Layer 1: 768 → 2*128
 // Layer 2: 256 → 32
 // Layer 3: 32 → 1
@@ -86,4 +86,4 @@ float* linear_layer_forward(const linear_layer<input_size, output_size>& layer, 
 float* cReLu(int size, float* output, const float* input);
 
 // actual evaluation
-float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color);
+float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color);
