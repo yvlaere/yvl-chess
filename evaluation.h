@@ -6,11 +6,10 @@
 #include <fstream>
 
 // start with a very basic NNUE implementation
-// this is a simple feedforward neural network with 4 layers
-// Layer 1: 768 → 1024
-// Layer 2: 1024 → 8
-// Layer 3: 8 → 32
-// Layer 4: 32 → 1
+// this is a simple feedforward neural network with 3 layers
+// Layer 1: 768 → 2*128
+// Layer 2: 256 → 32
+// Layer 3: 32 → 1
 // The input is a sparse vector of size 768 (0 or 1 values)
 // The output is a single value (the evaluation of the position)
 // The weights and biases are initialized randomly
@@ -19,16 +18,20 @@
 // and element-wise operations
 
 constexpr size_t INPUT_SIZE = 768;
-constexpr size_t HIDDEN1_SIZE = 1024;
-constexpr size_t HIDDEN2_SIZE = 8;
-constexpr size_t HIDDEN3_SIZE = 32;
+constexpr size_t HIDDEN1_SIZE = 128;
+constexpr size_t HIDDEN2_SIZE = 32;
+//constexpr size_t HIDDEN3_SIZE = 32;
 constexpr size_t OUTPUT_SIZE = 1;
 
 // define NNUE components
 
 // The accumulator is the *output* of the first hidden layer, it is what gets efficiently updated
 struct NNUE_accumulator {
-    std::array<float, HIDDEN1_SIZE> values;
+    std::array<std::array<float, HIDDEN1_SIZE>, 2> values;
+
+    float* operator[](bool color) {
+        return values[color].data();
+    }
 };
 
 // Linear layers have weights and biases
@@ -56,7 +59,7 @@ void load_layer(linear_layer<input_size, output_size>& layer, const std::string&
 }
 
 // input functions
-void game_state_to_input(const std::array<int, 64>& piece_on_square, std::vector<int>& active_features);
+void game_state_to_input(const std::array<int, 64>& piece_on_square, std::vector<int>& active_features_w, std::vector<int>& active_features_b);
 void refresh_accumulator(const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1, NNUE_accumulator& accumulator, const std::vector<int>& active_features, bool color);
 void update_accumulator(const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1, NNUE_accumulator& accumulator, const std::vector<int>& removed_features, const std::vector<int>& added_features, bool color);
 
@@ -83,4 +86,4 @@ float* linear_layer_forward(const linear_layer<input_size, output_size>& layer, 
 float* cReLu(int size, float* output, const float* input);
 
 // actual evaluation
-float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3, const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4);
+float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color);

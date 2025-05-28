@@ -206,8 +206,11 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
 
     if (depth == 0) {
         pv_length = 0;
+
         int eval = nnue_evaluation(accumulator, layer2, layer3, color);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
         //return color ? -eval : eval;
+
+        //std::cout << "Leaf evaluation at depth " << current_depth << ": " << eval << std::endl;
 
         return eval;
     }
@@ -434,20 +437,12 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
             // get the move index from the sorted order
             int move_index = move_order[i];
 
+            // print the move
+            //std::cout << "Move: " << index_to_chess(moves[move_index].from_position) 
+            //          << " -> " << index_to_chess(moves[move_index].to_position) << std::endl;
+
             move_undo& undo = undo_stack[0];
             apply_move(state, moves[move_index], zobrist_hash, zobrist, undo, piece_on_square, layer1, accumulator);
-            
-            /*
-            // print accumulator
-            for (int i = 0; i < HIDDEN1_SIZE; i++) {
-                std::cout << accumulator[0][i] << " ";
-            }
-            std::cout << std::endl;
-            for (int i = 0; i < HIDDEN1_SIZE; i++) {
-                std::cout << accumulator[1][i] << " ";
-            }
-            exit(0);
-            */
             
             U64 new_occupancy = get_occupancy(state.piece_bitboards);
 

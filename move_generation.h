@@ -3,7 +3,7 @@
 #include <vector>
 #include <random>
 #include <bitset>
-#include "evaluation_split.h"
+#include "evaluation.h"
 
 // aliases and global constants
 using U64 = unsigned long long;
@@ -146,6 +146,8 @@ int pseudo_legal_move_generator(std::array<move, 256>& moves,
     lookup_tables_wrap& lookup_tables,
     const U64& occupancy_bitboard);
 U64 init_zobrist_hashing_mailbox(game_state &state, zobrist_randoms &zobrist, bool color, std::array<int, 64>& piece_on_square);
+int alternative_position(int position);
+int alternative_piece(int piece_index);
 void apply_move(game_state& state, move& move_to_apply, U64& zobrist_hash, zobrist_randoms &zobrist, move_undo& undo, std::array<int, 64>& piece_on_square,
 const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1, NNUE_accumulator& accumulator);
 void undo_move(game_state& state, move& move_to_undo, U64& zobrist_hash, zobrist_randoms &zobrist, move_undo& undo, std::array<int, 64>& piece_on_square,

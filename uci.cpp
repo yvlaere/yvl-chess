@@ -2,6 +2,8 @@
 #include <string>
 #include <sstream>
 
+#include<fstream>
+
 // make my engine UCI compliant
 
 //move format is long algebraic notation
@@ -99,9 +101,23 @@ game_state fen_to_game_state(const std::string& fen, bool& color) {
     return state;
 }
 
+void save_lookup_tables(const lookup_tables_wrap& tables, const std::string& filename) {
+    std::ofstream out(filename, std::ios::binary);
+    if (!out) throw std::runtime_error("Failed to open file for writing");
+    out.write(reinterpret_cast<const char*>(&tables), sizeof(tables));
+}
+
+void load_lookup_tables(lookup_tables_wrap& tables, const std::string& filename) {
+    std::ifstream in(filename, std::ios::binary);
+    if (!in) throw std::runtime_error("Failed to open file for reading");
+    in.read(reinterpret_cast<char*>(&tables), sizeof(tables));
+}
+
 int main() {
     // initial game state
     // convention: least significant bit (rightmost bit) is A1
+
+    //std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
     U64 w_pawn = 65280;
     U64 w_knight = 66;
@@ -131,17 +147,23 @@ int main() {
 
     // create neural network layers
     linear_layer<INPUT_SIZE, HIDDEN1_SIZE> layer1;
-    linear_layer<HIDDEN1_SIZE, HIDDEN2_SIZE> layer2;
-    linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE> layer3;
-    linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE> layer4;
-    load_layer(layer1, "NNUE_training/model/layer1_weights.txt", "NNUE_training/model/layer1_biases.txt");
-    load_layer(layer2, "NNUE_training/model/layer2_weights.txt", "NNUE_training/model/layer2_biases.txt");
-    load_layer(layer3, "NNUE_training/model/layer3_weights.txt", "NNUE_training/model/layer3_biases.txt");
-    load_layer(layer4, "NNUE_training/model/layer4_weights.txt", "NNUE_training/model/layer4_biases.txt");
+    linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE> layer2;
+    linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE> layer3;
+    load_layer(layer1, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer1_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer1_biases.txt");
+    load_layer(layer2, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer2_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer2_biases.txt");
+    load_layer(layer3, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer3_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer3_biases.txt");
+
+    //std::cout << "timepoint 1: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
 
     // create lookup tables
     lookup_tables_wrap lookup_tables;
-    generate_lookup_tables(lookup_tables);
+    //generate_lookup_tables(lookup_tables);
+
+    //save_lookup_tables(lookup_tables, "lookup_tables.bin");
+    load_lookup_tables(lookup_tables, "/home/yvlaere/projects/yvl-chess/lookup_tables.bin");
+
+    //std::cout << "timepoint 2: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
+
 
     // create zobrist randoms
     zobrist_randoms zobrist;
@@ -168,6 +190,7 @@ int main() {
 
     // initialize
     game_state state = initial_game_state;
+
     std::array<int, 64> piece_on_square;
     piece_on_square.fill(-1);
     U64 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
@@ -175,11 +198,19 @@ int main() {
     int negamax_depth = 9;
     bool color = false;
 
+    //std::cout << "timepoint 3: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
+
+
     // NNUE accumulator
     NNUE_accumulator accumulator;
-    std::vector<int> active_features;
-    game_state_to_input(piece_on_square, active_features);
-    refresh_accumulator(layer1, accumulator, active_features, color);
+    std::vector<int> active_features_w;
+    std::vector<int> active_features_b;
+    game_state_to_input(piece_on_square, active_features_w, active_features_b);
+    refresh_accumulator(layer1, accumulator, active_features_w, false);
+    refresh_accumulator(layer1, accumulator, active_features_b, true);
+
+    //std::cout << "timepoint 4: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
+
 
     // UCI loop
     while (true) {
@@ -213,6 +244,11 @@ int main() {
             state = initial_game_state;
             zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
             occupancy_bitboard = get_occupancy(state.piece_bitboards);
+            std::vector<int> active_features_w;
+            std::vector<int> active_features_b;
+            game_state_to_input(piece_on_square, active_features_w, active_features_b);
+            refresh_accumulator(layer1, accumulator, active_features_w, false);
+            refresh_accumulator(layer1, accumulator, active_features_b, true);
             continue;
         }
         else if (sub_commands[0] == "position") {
@@ -221,6 +257,11 @@ int main() {
                 state = initial_game_state;
                 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, false, piece_on_square);
                 occupancy_bitboard = get_occupancy(state.piece_bitboards);
+                std::vector<int> active_features_w;
+                std::vector<int> active_features_b;
+                game_state_to_input(piece_on_square, active_features_w, active_features_b);
+                refresh_accumulator(layer1, accumulator, active_features_w, false);
+                refresh_accumulator(layer1, accumulator, active_features_b, true);
                 color = false;
             }
             else if (sub_commands[1] == "fen") {
@@ -242,6 +283,11 @@ int main() {
                 state = fen_to_game_state(fen_string, color);
                 zobrist_hash = init_zobrist_hashing_mailbox(state, zobrist, color, piece_on_square);
                 occupancy_bitboard = get_occupancy(state.piece_bitboards);
+                std::vector<int> active_features_w;
+                std::vector<int> active_features_b;
+                game_state_to_input(piece_on_square, active_features_w, active_features_b);
+                refresh_accumulator(layer1, accumulator, active_features_w, false);
+                refresh_accumulator(layer1, accumulator, active_features_b, true);
             }
             for (int i = 2; i < sub_commands.size(); i++) {
                 if (sub_commands[i] == "moves") {
@@ -271,7 +317,7 @@ int main() {
             // start the search
 
             U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-            move best_move = iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
+            move best_move = iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3);
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }
