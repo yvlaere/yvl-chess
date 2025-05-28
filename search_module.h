@@ -1,4 +1,4 @@
-#include "move_generation_split.h"
+#include "move_generation.h"
 #include <limits>
 #include <string>
 #include <algorithm>
