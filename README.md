@@ -110,5 +110,19 @@ The chess engine was evaluated using cutechess-cli (https://github.com/cutechess
 
 The chess engine is available on lichess as yvl-bot: https://lichess.org/@/yvl-bot
 
+## NNUE support
+Currently, the chess engine uses a handcrafted evaluation, but it includes experimental support for NNUE (efficiently updatable neural networks). I don't have the hardware to train a good NNUE, but a script for training an NNUE using pytorch is included. The NNEU i trained didn't outperform the handcrafted evaluation and training is too slow to continue.
+
+The NNUE implementation is mostly based off of the Stockfish NNUE documentation:  https://official-stockfish.github.io/docs/nnue-pytorch-wiki/docs/nnue.html.
+
+### Training data
+Datasets with evaluated chess positions can be found here: https://robotmoon.com/nnue-training-data/. These .binpack files can be converted to human readable data using the `stockfish convert` command from the stockfish tools repo: https://github.com/official-stockfish/Stockfish/tree/tools. 
+
+### Model architecture
+Currently, the model architecture used in this project is very simple. The input feature set consists of 2 arrays, each with 768 binary values. Each value represents a possible combination of piece type (6), piece color (2), and position (64). The first 768-element array uses the position from the perspective of the white player, the second 768-element array uses the position from the perspective of the black player. These two arrays are passed through the same fully connected layer (768 -> 128), after which the two resulting 128-element arrays are concatenated. The order of the concatenation depends on the side to move. After the concatenation, a CReLU activation function is used. This is followed by a second fully connected layer (256 -> 32), followed by another cReLU layer and a final fully connected layer (32 -> 1). 
+
+### Model training
+The output of the model is an estimated centipawn value. For model training, this value is transformed to a WDL (win-draw-loss) value by rescaling it (dividing by 400) and passing it to a sigmoid function. This pushes the value into a [0, 1] range, reduces the effect of outliers and makes neutral positions more important.
+
 ## License
 This project is licensed under the GPL-3.0 license (https://www.gnu.org/licenses/quick-guide-gplv3.html)
