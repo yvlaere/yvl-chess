@@ -207,7 +207,7 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     if (depth == 0) {
         pv_length = 0;
 
-        int eval = nnue_evaluation(accumulator, layer2, layer3, color);//evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, layer4);
+        int eval = evaluation(state);//nnue_evaluation(accumulator, layer2, layer3, color);
         //return color ? -eval : eval;
 
         //std::cout << "Leaf evaluation at depth " << current_depth << ": " << eval << std::endl;
