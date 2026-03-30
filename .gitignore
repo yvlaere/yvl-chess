@@ -1,5 +1,6 @@
 .vscode/
 .venv/
+venv
 deprecated/
 NNUE_training/model
 NNUE_training/runs
