@@ -60,12 +60,12 @@ float* cReLu(int size, float* output, const float* input) {
     return output + size;
 }
 
-float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color) {
+float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3, const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4, bool color) {
 
     // create a buffer that can fit the largest layer twice
     // so it needs to be max(HIDDEN1_SIZE, HIDDEN2_SIZE, OUTPUT_SIZE) × 2
     // this is faster than std::vector because it presents dynamic allocation overhead
-    float buffer[1024];
+    float buffer[2048];
 
     std::array<float, 2*HIDDEN1_SIZE> input;
     bool stm = color;
@@ -93,8 +93,18 @@ float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_
     curr_input = curr_output;
     curr_output = next_output;
 
-    // linear layer 4
+    // linear layer 3
     next_output = linear_layer_forward(layer3, curr_output, curr_input);
+    curr_input = curr_output;
+    curr_output = next_output;
+
+    // cReLu after layer 3
+    next_output = cReLu(HIDDEN3_SIZE, curr_output, curr_input);
+    curr_input = curr_output;
+    curr_output = next_output;
+
+    // linear layer 4
+    next_output = linear_layer_forward(layer4, curr_output, curr_input);
 
     return *curr_output;
 

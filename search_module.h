@@ -53,7 +53,8 @@ int negamax(game_state &state, int depth, int alpha, int beta, bool color,
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
     const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
-    const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3);
+    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
+    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4);
 
 move iterative_deepening(game_state& state, int max_depth, bool color,
     lookup_tables_wrap& lookup_tables, U64& occupancy_bitboard,
@@ -67,4 +68,5 @@ move iterative_deepening(game_state& state, int max_depth, bool color,
     NNUE_accumulator& accumulator,
     const linear_layer<INPUT_SIZE, HIDDEN1_SIZE>& layer1,
     const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2,
-    const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3);
+    const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3,
+    const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4);

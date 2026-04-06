@@ -7,9 +7,10 @@
 
 // start with a very basic NNUE implementation
 // this is a simple feedforward neural network with 3 layers
-// Layer 1: 768 → 2*128
-// Layer 2: 256 → 32
-// Layer 3: 32 → 1
+// Layer 1: 768 → 2*512
+// Layer 2: 1024 → 64
+// Layer 3: 64 → 16
+// Layer 4: 16 → 1
 // The input is a sparse vector of size 768 (0 or 1 values)
 // The output is a single value (the evaluation of the position)
 // The weights and biases are initialized randomly
@@ -18,9 +19,9 @@
 // and element-wise operations
 
 constexpr size_t INPUT_SIZE = 768;
-constexpr size_t HIDDEN1_SIZE = 128;
-constexpr size_t HIDDEN2_SIZE = 32;
-//constexpr size_t HIDDEN3_SIZE = 32;
+constexpr size_t HIDDEN1_SIZE = 512;
+constexpr size_t HIDDEN2_SIZE = 64;
+constexpr size_t HIDDEN3_SIZE = 16;
 constexpr size_t OUTPUT_SIZE = 1;
 
 // define NNUE components
@@ -86,4 +87,4 @@ float* linear_layer_forward(const linear_layer<input_size, output_size>& layer, 
 float* cReLu(int size, float* output, const float* input);
 
 // actual evaluation
-float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE>& layer3, bool color);
+float nnue_evaluation(NNUE_accumulator& accumulator, const linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE>& layer2, const linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE>& layer3, const linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE>& layer4, bool color);

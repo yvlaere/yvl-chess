@@ -148,10 +148,12 @@ int main() {
     // create neural network layers
     linear_layer<INPUT_SIZE, HIDDEN1_SIZE> layer1;
     linear_layer<HIDDEN1_SIZE*2, HIDDEN2_SIZE> layer2;
-    linear_layer<HIDDEN2_SIZE, OUTPUT_SIZE> layer3;
-    load_layer(layer1, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer1_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer1_biases.txt");
-    load_layer(layer2, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer2_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer2_biases.txt");
-    load_layer(layer3, "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer3_weights.txt", "/home/yvlaere/projects/yvl-chess/NNUE_training/model/layer3_biases.txt");
+    linear_layer<HIDDEN2_SIZE, HIDDEN3_SIZE> layer3;
+    linear_layer<HIDDEN3_SIZE, OUTPUT_SIZE> layer4;
+    load_layer(layer1, "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer1_weights.txt", "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer1_biases.txt");
+    load_layer(layer2, "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer2_weights.txt", "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer2_biases.txt");
+    load_layer(layer3, "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer3_weights.txt", "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer3_biases.txt");
+    load_layer(layer4, "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer4_weights.txt", "/home/yvlaere/Projects/yvl-chess/NNUE_training/model/layer4_biases.txt");
 
     //std::cout << "timepoint 1: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
 
@@ -160,7 +162,7 @@ int main() {
     //generate_lookup_tables(lookup_tables);
 
     //save_lookup_tables(lookup_tables, "lookup_tables.bin");
-    load_lookup_tables(lookup_tables, "/home/yvlaere/projects/yvl-chess/lookup_tables.bin");
+    load_lookup_tables(lookup_tables, "/home/yvlaere/Projects/yvl-chess/lookup_tables.bin");
 
     //std::cout << "timepoint 2: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() << " ms" << std::endl;
 
@@ -317,7 +319,7 @@ int main() {
             // start the search
 
             U64 occupancy_bitboard = get_occupancy(state.piece_bitboards);
-            move best_move = iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3);
+            move best_move = iterative_deepening(state, negamax_depth, color, lookup_tables, occupancy_bitboard, zobrist, zobrist_hash, moves_stack, undo_stack, transposition_table, piece_on_square, killer_moves, history_moves, accumulator, layer1, layer2, layer3, layer4);
             std::cout << "bestmove " << move_to_long_algebraic(best_move) << std::endl;
         }
     }
